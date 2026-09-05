@@ -1,0 +1,51 @@
+{
+  "split": "test",
+  "samples": 660,
+  "thresholds": {
+    "skin_enhancement": 0.9731335639953613,
+    "face_slimming": 0.7373626828193665,
+    "eye_enlargement": 0.6948218941688538,
+    "facial_contouring": 0.9494019746780396
+  },
+  "classes": {
+    "skin_enhancement": {
+      "precision": 0.9523809523809523,
+      "recall": 1.0,
+      "f1": 0.975609756097561,
+      "roc_auc": 0.9997718253968253,
+      "average_precision": 0.9996074044656941
+    },
+    "face_slimming": {
+      "precision": 1.0,
+      "recall": 0.9555555555555556,
+      "f1": 0.9772727272727273,
+      "roc_auc": 0.998125,
+      "average_precision": 0.996562478021724
+    },
+    "eye_enlargement": {
+      "precision": 0.8089887640449438,
+      "recall": 0.4,
+      "f1": 0.5353159851301115,
+      "roc_auc": 0.9306944444444445,
+      "average_precision": 0.8201147270070326
+    },
+    "facial_contouring": {
+      "precision": 0.9444444444444444,
+      "recall": 0.9444444444444444,
+      "f1": 0.9444444444444444,
+      "roc_auc": 0.991712962962963,
+      "average_precision": 0.9854815483267191
+    }
+  },
+  "macro_f1": 0.8581607282362111,
+  "clean_false_positive_rate_all_four_experimental_heads": 0.2,
+  "published_classes": [
+    "skin_enhancement",
+    "face_slimming",
+    "facial_contouring"
+  ],
+  "published_macro_f1": 0.9657756426049109,
+  "excluded_classes": {
+    "eye_enlargement": "Recall fell to 0.40 under clean false-positive control; not exposed by the production API."
+  }
+}

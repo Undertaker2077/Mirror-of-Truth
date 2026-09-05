@@ -5,13 +5,15 @@ from fastapi.testclient import TestClient
 from beautyproof_api.server import app
 
 
-def test_unified_api_filters_unsupported_slimming_and_jawline(tmp_path: Path):
+def test_unified_api_returns_three_accepted_types_and_filters_eye_and_jawline(tmp_path: Path):
     image = tmp_path / "face.jpg"
     image.write_bytes(b"fixture")
     api = UnifiedBeautyProofAPI(
         v2_predictor=lambda _: {"probability": .91},
         type_predictor=lambda _: {
-            "probabilities": {"smoothing": .84, "whitening": .67, "slimming": .99},
+            "probabilities": {"skin_enhancement": .84, "face_slimming": .67, "facial_contouring": .71, "eye_enlargement": .99},
+            "thresholds": {"skin_enhancement": .5, "face_slimming": .5, "facial_contouring": .5},
+            "strengths": {"skin_enhancement": .6, "face_slimming": .5, "facial_contouring": .7},
             "strength": "medium",
         },
         region_predictor=lambda _: [
@@ -21,7 +23,7 @@ def test_unified_api_filters_unsupported_slimming_and_jawline(tmp_path: Path):
     )
     result = api.analyze(image)
     assert result["retouched"] is True
-    assert [x["name"] for x in result["retouch_types"]] == ["smoothing", "whitening"]
+    assert [x["name"] for x in result["retouch_types"]] == ["skin_enhancement", "face_slimming", "facial_contouring"]
     assert [x["name"] for x in result["modified_regions"]] == ["left_cheek"]
     assert result["models"]["binary_detector"] == "BeautyProof-V2"
 
@@ -30,7 +32,7 @@ def test_v2_is_authoritative_when_regions_are_empty(tmp_path: Path):
     image = tmp_path / "face.jpg"; image.write_bytes(b"fixture")
     api = UnifiedBeautyProofAPI(
         v2_predictor=lambda _: {"probability": .8},
-        type_predictor=lambda _: {"probabilities": {"smoothing": .2, "whitening": .1}, "strength": "low"},
+        type_predictor=lambda _: {"probabilities": {"skin_enhancement": .2}, "strengths": {}},
         region_predictor=lambda _: [],
     )
     result = api.analyze(image)
@@ -42,7 +44,7 @@ def test_negative_v2_suppresses_downstream_claims(tmp_path: Path):
     image = tmp_path / "face.jpg"; image.write_bytes(b"fixture")
     api = UnifiedBeautyProofAPI(
         v2_predictor=lambda _: {"probability": .12},
-        type_predictor=lambda _: {"probabilities": {"smoothing": .99, "whitening": .99}, "strength": "high"},
+        type_predictor=lambda _: {"probabilities": {"skin_enhancement": .99}, "strengths": {}},
         region_predictor=lambda _: [{"name": "nose", "confidence": .9, "polygon": []}],
     )
     result = api.analyze(image)

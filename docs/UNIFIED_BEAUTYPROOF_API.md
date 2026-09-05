@@ -4,14 +4,14 @@
 
 V2 is authoritative for `retouched`. Type and region models only enrich a positive V2 result. If V2 is positive and no supported region is found, the API returns `region_status: not_localized`.
 
-Supported effect types are `smoothing` and `whitening`. Supported regions are `forehead`, `left_cheek`, `right_cheek`, `nose`, `chin`, and `full_face`. Slimming and jawline predictions are filtered before serialization.
+Supported effect types are `skin_enhancement` (磨皮美白), `face_slimming` (瘦脸), and `facial_contouring` (五官立体). Supported regions are `forehead`, `left_cheek`, `right_cheek`, `nose`, `chin`, and `full_face`. Eye enlargement is not published because it failed the clean false-positive/recall acceptance gate.
 
 ## Python API
 
 ```python
 from beautyproof_api import UnifiedBeautyProofAPI
 
-api = UnifiedBeautyProofAPI(retouch_threshold=0.5, type_threshold=0.5)
+api = UnifiedBeautyProofAPI(retouch_threshold=0.5)
 result = api.analyze("face.jpg")
 ```
 
@@ -42,8 +42,8 @@ curl -X POST http://localhost:8000/v1/analyze -F "image=@face.jpg"
   "schema_version": "1.0",
   "retouched": true,
   "retouch_probability": 0.923114,
-  "retouch_types": [{"name": "smoothing", "probability": 0.817331}],
-  "retouch_strength": "medium",
+  "retouch_types": [{"name": "skin_enhancement", "probability": 0.981733, "strength": 0.71}],
+  "retouch_strength": 0.71,
   "modified_regions": [{
     "name": "left_cheek",
     "confidence": 0.741203,
@@ -52,7 +52,7 @@ curl -X POST http://localhost:8000/v1/analyze -F "image=@face.jpg"
   "region_status": "localized",
   "models": {
     "binary_detector": "BeautyProof-V2",
-    "type_classifier": "Retouch-Multitask-CNN-V1",
+    "type_classifier": "BeautyProof-Retouch-Three-Type-V1",
     "region_segmenter": "YOLO11n-Seg-30e"
   },
   "limitations": []
@@ -81,4 +81,4 @@ python -m beautyproof_api.cli INPUT_IMAGE [--output result.json]
 - Uploads larger than 10 MiB: HTTP 413.
 - Missing/incompatible checkpoint or hash mismatch: HTTP 503; verify model paths and hashes.
 - Never infer “clean” from an empty `modified_regions` array.
-- Do not convert smoothing/whitening probabilities into product-efficacy conclusions.
+- Do not convert retouch probabilities into makeup or product-efficacy conclusions.

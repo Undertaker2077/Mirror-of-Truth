@@ -1,0 +1,12 @@
+model: BeautyProof-Retouch-Three-Type-V1
+input_size: 224
+labels:
+  - skin_enhancement
+  - face_slimming
+  - facial_contouring
+thresholds:
+  skin_enhancement: 0.9731335639953613
+  face_slimming: 0.7373626828193665
+  facial_contouring: 0.9494019746780396
+excluded_experimental_label: eye_enlargement
+binary_authority: BeautyProof-V2

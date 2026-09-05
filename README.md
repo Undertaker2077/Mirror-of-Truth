@@ -1,8 +1,8 @@
 # Mirror of Truth — BeautyProof Unified API
 
-This repository exposes one API over three complementary models: BeautyProof V2 for the authoritative binary retouch decision, Retouch Multitask CNN V1 for smoothing/whitening, and YOLO11n-Seg Regions V1 for facial-region localization.
+This repository exposes one API over three complementary models: BeautyProof V2 for the authoritative binary retouch decision, BeautyProof Retouch Three-Type V1 for skin enhancement/face slimming/facial contouring, and YOLO11n-Seg Regions V1 for facial-region localization.
 
-> Slimming/jawline, makeup detection, and product-efficacy claims are intentionally not exposed. Type and region models were validated primarily on controlled synthetic edits.
+> Eye enlargement, makeup detection, and product-efficacy claims are intentionally not exposed. Type and region models were validated primarily on controlled synthetic edits.
 
 ## Quick start
 
