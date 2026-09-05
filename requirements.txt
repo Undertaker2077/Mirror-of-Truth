@@ -1,0 +1,7 @@
+torch>=2.4,<3
+torchvision>=0.19,<1
+numpy>=2,<3
+Pillow>=10,<13
+opencv-python-headless>=4.10,<5
+pytest>=8,<10
+
