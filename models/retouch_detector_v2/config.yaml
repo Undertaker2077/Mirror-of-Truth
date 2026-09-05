@@ -1,0 +1,16 @@
+seed: 42
+resume_checkpoint: models/retouch_detector/best_model.pt
+output_dir: models/retouch_detector_v2
+batch_size: 16
+num_workers: 0
+epochs: 5
+learning_rate: 5.0e-05
+weight_decay: 0.0001
+early_stopping_patience: 2
+unfreeze_last_blocks: 2
+threshold: 0.5
+device: auto
+data:
+  v1_metadata: data/metadata.csv
+  hard_negative_v2: data/processed/hard_negative_v2.csv
+
