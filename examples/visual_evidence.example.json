@@ -1,0 +1,42 @@
+{
+  "visual_evidence": {
+    "integrity_score": 0.73,
+    "reliability": "Medium",
+    "metrics": {
+      "skin_smoothing": {
+        "level": "Medium",
+        "score": 0.73,
+        "basis": "binary_score_proxy",
+        "limitation": "Proxy derived from the V2 binary retouch score; not an independent detector for this manipulation type."
+      },
+      "texture_loss": {
+        "level": "Medium",
+        "score": 0.73,
+        "basis": "binary_score_proxy",
+        "limitation": "Proxy derived from the V2 binary retouch score; not an independent detector for this manipulation type."
+      },
+      "whitening": {
+        "level": "Medium",
+        "score": 0.73,
+        "basis": "binary_score_proxy",
+        "limitation": "Proxy derived from the V2 binary retouch score; not an independent detector for this manipulation type."
+      }
+    },
+    "manipulation_map": "outputs/example_heatmap.png",
+    "reliability_details": {
+      "level": "Medium",
+      "score": 0.71,
+      "classification_confidence": 0.8,
+      "map_concentration": 0.5,
+      "method": "0.7 * classification_confidence + 0.3 * Grad-CAM concentration"
+    },
+    "model_version": "BeautyProof-V2",
+    "threshold": 0.5,
+    "limitations": [
+      "Business metrics are proxies from one binary score.",
+      "Grad-CAM is model attention, not pixel-level forensic ground truth.",
+      "Do not use as the sole basis for legal, medical, hiring, or identity decisions."
+    ]
+  }
+}
+
