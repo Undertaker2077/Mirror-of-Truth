@@ -7,7 +7,10 @@ The primary MVP model route is BeautyProof V2.
 
 ```bash
 cd /Users/maoyiqi/Downloads/Mirror-of-Truth-demo
-python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+python3 -m pip install -r requirements.txt
+npm install --ignore-scripts
+npm run build
+MIRROR_USE_REAL_AIDETECTOR=1 /Users/maoyiqi/.pyenv/versions/3.13.0/bin/python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
 Open:
@@ -21,6 +24,23 @@ http://127.0.0.1:8765
 - Makeup single image: AI-generated risk plus over-beautification signals.
 - Fashion single image: AI-generated seller-image risk.
 - Before/after makeup: exposure, white balance, smoothing, and retouching differences.
+
+## Frontend
+
+The frontend is a Vue 3 + Vite app in `frontend/`.
+
+Development server:
+
+```bash
+npm run dev
+```
+
+Production build served by FastAPI:
+
+```bash
+npm run build
+MIRROR_USE_REAL_AIDETECTOR=1 /Users/maoyiqi/.pyenv/versions/3.13.0/bin/python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+```
 
 ## BeautyProof V2 Model
 

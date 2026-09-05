@@ -1,0 +1,17 @@
+{
+  "name": "mirror-of-truth-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5174"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "5.2.4",
+    "vite": "5.4.20",
+    "vue": "3.5.21"
+  },
+  "devDependencies": {}
+}

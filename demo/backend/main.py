@@ -13,6 +13,7 @@ from .detector_service import build_before_after_analysis, build_single_analysis
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
+FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
 VENDOR_DIR = PROJECT_ROOT / "vendor" / "ai-image-detector"
 
 app = FastAPI(title="Mirror of Truth Part B Demo", version="0.1.0")
@@ -24,14 +25,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+if (FRONTEND_DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST_DIR / "assets")), name="assets")
+elif FRONTEND_DIR.exists():
+    app.mount("/src", StaticFiles(directory=str(FRONTEND_DIR / "src")), name="src")
 HEATMAP_ROOT.mkdir(parents=True, exist_ok=True)
 app.mount("/heatmaps", StaticFiles(directory=str(HEATMAP_ROOT)), name="heatmaps")
 
 
 @app.get("/")
 def index() -> FileResponse:
+    built_index = FRONTEND_DIST_DIR / "index.html"
+    if built_index.exists():
+        return FileResponse(built_index)
     return FileResponse(FRONTEND_DIR / "index.html")
 
 

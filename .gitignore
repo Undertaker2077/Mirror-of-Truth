@@ -5,5 +5,8 @@ __pycache__/
 .pytest-*/
 runtime/
 demo/runtime/
+node_modules/
+demo/node_modules/
+demo/frontend/dist/
 .venv/
 venv/
