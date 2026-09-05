@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pillow
+python-multipart
+numpy
+torch
+torchvision
+mmengine
+-e vendor/ai-image-detector[api]
