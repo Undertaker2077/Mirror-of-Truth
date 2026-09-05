@@ -1,0 +1,26 @@
+{
+  "model_version": "BeautyProof-V2",
+  "decision_threshold": 0.5,
+  "evaluation_set": "typed_hard_negative",
+  "sample_count": 80,
+  "true_negatives": 77,
+  "false_positives": 3,
+  "false_positive_rate": 0.0375,
+  "acceptance_target": "false_positive_rate < 0.20",
+  "acceptance_passed": true,
+  "subgroups": {
+    "soft_light": {"count": 8, "false_positives": 0, "false_positive_rate": 0.0},
+    "blur": {"count": 8, "false_positives": 0, "false_positive_rate": 0.0},
+    "denoise": {"count": 8, "false_positives": 0, "false_positive_rate": 0.0},
+    "exposure": {"count": 16, "false_positives": 1, "false_positive_rate": 0.0625},
+    "jpeg": {"count": 24, "false_positives": 2, "false_positive_rate": 0.0833333333},
+    "resize": {"count": 8, "false_positives": 0, "false_positive_rate": 0.0},
+    "unaltered": {"count": 8, "false_positives": 0, "false_positive_rate": 0.0}
+  },
+  "natural_smooth_skin": {
+    "status": "not_separately_labeled",
+    "note": "A separately labeled natural-smooth-skin subgroup is required before claiming its individual FPR."
+  },
+  "source": "Frozen V2 evaluation artifacts"
+}
+
