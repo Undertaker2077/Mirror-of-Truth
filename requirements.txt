@@ -4,4 +4,8 @@ numpy>=2,<3
 Pillow>=10,<13
 opencv-python-headless>=4.10,<5
 pytest>=8,<10
+ultralytics>=8.4,<9
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+python-multipart>=0.0.20,<1
 
