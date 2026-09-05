@@ -1,16 +1,17 @@
 # Mirror of Truth Demo
 
 Part B frontend/backend demo for visual false-advertising risk detection.
-The primary MVP model route is BeautyProof V2.
+The primary MVP model route is BeautyProof Unified API, with BeautyProof V2
+smoke fallback for local UI demos.
 
 ## Run
 
 ```bash
-cd /Users/maoyiqi/Downloads/Mirror-of-Truth-demo
+cd Mirror-of-Truth-demo
 python3 -m pip install -r requirements.txt
 npm install --ignore-scripts
 npm run build
-MIRROR_USE_REAL_AIDETECTOR=1 /Users/maoyiqi/.pyenv/versions/3.13.0/bin/python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
 Open:
@@ -39,16 +40,61 @@ Production build served by FastAPI:
 
 ```bash
 npm run build
-MIRROR_USE_REAL_AIDETECTOR=1 /Users/maoyiqi/.pyenv/versions/3.13.0/bin/python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
-## BeautyProof V2 Model
+## BeautyProof Unified Model
+
+The demo can call your friend's unified package:
+
+```python
+from beautyproof_api import UnifiedBeautyProofAPI
+
+result = UnifiedBeautyProofAPI(retouch_threshold=0.5, type_threshold=0.5).analyze("face.jpg")
+```
+
+Expected package and checkpoint layout:
+
+```text
+Mirror-of-Truth/
+  beautyproof_api/
+  models/
+    retouch_detector_v2/best_model.pt
+    retouch_multitask_cnn_v1/best_model.pt
+    yolo_retouch_regions_v1/best.pt
+  demo/
+```
+
+If this demo is not inside the `Mirror-of-Truth` repo root, point it at the repo:
+
+```bash
+export BEAUTYPROOF_API_PATH=/path/to/Mirror-of-Truth
+```
+
+Start with unified model loading enabled:
+
+```bash
+BEAUTYPROOF_USE_UNIFIED=1 MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+```
+
+Direct unified routes:
+
+```bash
+curl -s -F image=@example.jpg http://127.0.0.1:8765/api/beautyproof/unified/analyze
+curl -s -F image=@example.jpg http://127.0.0.1:8765/v1/analyze
+```
+
+The response follows the unified contract: `retouched`,
+`retouch_probability`, `retouch_types`, `retouch_strength`,
+`modified_regions`, `region_status`, `models`, and `limitations`.
+
+## BeautyProof V2 Fallback
 
 Put the checkpoint in one of these locations:
 
 ```text
-/Users/maoyiqi/Downloads/Mirror-of-Truth-demo/best_model.pt
-/Users/maoyiqi/Downloads/Mirror-of-Truth-demo/models/retouch_detector_v2/best_model.pt
+Mirror-of-Truth-demo/best_model.pt
+Mirror-of-Truth-demo/models/retouch_detector_v2/best_model.pt
 ```
 
 The backend verifies the expected SHA256:

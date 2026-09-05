@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .beautyproof_v2 import CHECKPOINT_CANDIDATES, HEATMAP_ROOT, BeautyProofV2Service
 from .detector_service import build_before_after_analysis, build_single_analysis
+from .unified_beautyproof import (
+    MAX_UPLOAD_BYTES,
+    analyze_image_bytes,
+    unified_status,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -53,9 +58,10 @@ def health() -> dict:
             "real_model_env": "set BEAUTYPROOF_USE_REAL=1 to load BeautyProof V2 checkpoint",
             "mock_mode": "default until BEAUTYPROOF_USE_REAL=1",
         },
+        "beautyproof_unified": unified_status(),
         "ai_detector_repo_present": VENDOR_DIR.exists(),
         "real_detector_env": "set MIRROR_USE_REAL_AIDETECTOR=1 to load lynote-ai/ai-image-detector",
-        "supported_modes": ["beautyproof_v2", "makeup_single", "fashion_single", "before_after"],
+        "supported_modes": ["beautyproof_unified", "beautyproof_v2", "makeup_single", "fashion_single", "before_after"],
     }
 
 
@@ -65,6 +71,40 @@ async def beautyproof_v2_detect(
 ) -> dict:
     image_bytes = await image.read()
     return BeautyProofV2Service().predict_bytes(image_bytes, image.filename)
+
+
+@app.post("/api/beautyproof/unified/analyze")
+async def beautyproof_unified_analyze(
+    image: UploadFile = File(...),
+) -> dict:
+    image_bytes = await image.read(MAX_UPLOAD_BYTES + 1)
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="empty image")
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="image exceeds 10 MiB limit")
+    try:
+        return analyze_image_bytes(image_bytes, image.filename)
+    except (FileNotFoundError, RuntimeError, ImportError, ModuleNotFoundError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/analyze")
+async def beautyproof_unified_compatible_analyze(
+    image: UploadFile = File(...),
+) -> dict:
+    image_bytes = await image.read(MAX_UPLOAD_BYTES + 1)
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="empty image")
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="image exceeds 10 MiB limit")
+    try:
+        return analyze_image_bytes(image_bytes, image.filename)
+    except (FileNotFoundError, RuntimeError, ImportError, ModuleNotFoundError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/analyze/single")

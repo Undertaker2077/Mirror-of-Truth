@@ -11,6 +11,7 @@ from typing import Any
 from PIL import Image, ImageFilter, ImageStat
 
 from .beautyproof_v2 import BeautyProofV2Service
+from .unified_beautyproof import UnifiedBeautyProofService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -168,8 +169,12 @@ def compare_images_basic(before_bytes: bytes, after_bytes: bytes) -> dict[str, A
 
 def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, backend: str) -> dict[str, Any]:
     model = AIDetectorService(backend=backend).detect(image_bytes, filename)
-    beautyproof = BeautyProofV2Service().predict_bytes(image_bytes, filename)
-    visual_evidence = beautyproof.get("visual_evidence")
+    beautyproof_unified = UnifiedBeautyProofService().predict_bytes(image_bytes, filename)
+    legacy_beautyproof = None
+    visual_evidence = beautyproof_unified.get("visual_evidence")
+    if visual_evidence is None:
+        legacy_beautyproof = BeautyProofV2Service().predict_bytes(image_bytes, filename)
+        visual_evidence = legacy_beautyproof.get("visual_evidence")
     retouch = estimate_retouch_signals(image_bytes)
     ai_prob = float(model["probability_ai"])
     beautyproof_score = (
@@ -188,19 +193,35 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
         ]
     if visual_evidence:
         evidence.append(
-            f"BeautyProof V2 修图概率 {visual_evidence['retouch_probability']:.1%}，"
+            f"BeautyProof 修图概率 {visual_evidence['retouch_probability']:.1%}，"
             f"可靠性 {visual_evidence['reliability']}。"
         )
-        evidence.append("skin_smoothing / texture_loss / whitening 目前都是二分类分数代理，不是独立分项模型。")
+        if visual_evidence.get("model_version") == "BeautyProof-Unified":
+            evidence.append(
+                f"Unified 输出：strength={visual_evidence.get('retouch_strength', 'none')}，"
+                f"region_status={visual_evidence.get('region_status', 'N/A')}。"
+            )
+            if visual_evidence.get("retouch_types"):
+                types = ", ".join(
+                    f"{item['name']} {float(item['probability']):.1%}"
+                    for item in visual_evidence["retouch_types"]
+                )
+                evidence.append(f"修图类型假设：{types}。")
+            if visual_evidence.get("modified_regions"):
+                regions = ", ".join(item["name"] for item in visual_evidence["modified_regions"])
+                evidence.append(f"疑似区域假设：{regions}。")
+        else:
+            evidence.append("skin_smoothing / texture_loss / whitening 目前都是二分类分数代理，不是独立分项模型。")
     else:
-        evidence.append(f"BeautyProof V2 暂不可用：{beautyproof.get('error', {}).get('message', 'unknown error')}")
+        evidence.append(f"BeautyProof Unified 暂不可用：{beautyproof_unified.get('error', {}).get('message', 'unknown error')}")
     evidence.extend(retouch["tags"] or ["未检测到强烈的基础后期信号"])
     return {
         "mode": mode,
         "verdict": "High risk" if confidence >= 0.62 else "Medium risk" if confidence >= 0.42 else "Low risk",
         "false_advertising_confidence": _rounded(confidence),
         "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.42 else "INSUFFICIENT",
-        "beautyproof_v2": beautyproof,
+        "beautyproof_unified": beautyproof_unified,
+        "beautyproof_v2": legacy_beautyproof,
         "visual_evidence": visual_evidence,
         "model_output": model,
         "retouch_signals": retouch,
@@ -217,9 +238,17 @@ def build_before_after_analysis(
 ) -> dict[str, Any]:
     before_model = AIDetectorService(backend=backend).detect(before_bytes, before_filename)
     after_model = AIDetectorService(backend=backend).detect(after_bytes, after_filename)
-    before_beautyproof = BeautyProofV2Service().predict_bytes(before_bytes, before_filename)
-    after_beautyproof = BeautyProofV2Service().predict_bytes(after_bytes, after_filename)
+    before_beautyproof = UnifiedBeautyProofService().predict_bytes(before_bytes, before_filename)
+    after_beautyproof = UnifiedBeautyProofService().predict_bytes(after_bytes, after_filename)
+    legacy_before_beautyproof = None
+    legacy_after_beautyproof = None
+    if before_beautyproof.get("visual_evidence") is None:
+        legacy_before_beautyproof = BeautyProofV2Service().predict_bytes(before_bytes, before_filename)
+    if after_beautyproof.get("visual_evidence") is None:
+        legacy_after_beautyproof = BeautyProofV2Service().predict_bytes(after_bytes, after_filename)
     after_visual_evidence = after_beautyproof.get("visual_evidence")
+    if after_visual_evidence is None and legacy_after_beautyproof is not None:
+        after_visual_evidence = legacy_after_beautyproof.get("visual_evidence")
     comparison = compare_images_basic(before_bytes, after_bytes)
     reliability_penalty = {"High": 0.18, "Medium": 0.38, "Low": 0.6}[comparison["comparison_reliability"]]
     ai_risk = max(float(before_model["probability_ai"]), float(after_model["probability_ai"]))
@@ -232,20 +261,27 @@ def build_before_after_analysis(
     evidence = list(comparison["agent_should_notice"])
     if after_visual_evidence:
         evidence.append(
-            f"After 图 BeautyProof V2 修图概率 {after_visual_evidence['retouch_probability']:.1%}，"
+            f"After 图 BeautyProof 修图概率 {after_visual_evidence['retouch_probability']:.1%}，"
             f"模型状态 {after_visual_evidence['model_status']}。"
         )
+        if after_visual_evidence.get("model_version") == "BeautyProof-Unified":
+            evidence.append(
+                f"After 图 Unified 输出：strength={after_visual_evidence.get('retouch_strength', 'none')}，"
+                f"region_status={after_visual_evidence.get('region_status', 'N/A')}。"
+            )
     else:
         evidence.append(
-            f"After 图 BeautyProof V2 暂不可用：{after_beautyproof.get('error', {}).get('message', 'unknown error')}"
+            f"After 图 BeautyProof Unified 暂不可用：{after_beautyproof.get('error', {}).get('message', 'unknown error')}"
         )
     return {
         "mode": "before_after",
         "verdict": "High risk" if confidence >= 0.62 else "Medium risk" if confidence >= 0.42 else "Low risk",
         "false_advertising_confidence": _rounded(confidence),
         "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.42 else "SUPPORTED",
-        "before_beautyproof_v2": before_beautyproof,
-        "after_beautyproof_v2": after_beautyproof,
+        "before_beautyproof_unified": before_beautyproof,
+        "after_beautyproof_unified": after_beautyproof,
+        "before_beautyproof_v2": legacy_before_beautyproof,
+        "after_beautyproof_v2": legacy_after_beautyproof,
         "visual_evidence": after_visual_evidence,
         "before_model_output": before_model,
         "after_model_output": after_model,

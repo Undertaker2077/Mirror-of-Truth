@@ -1,5 +1,5 @@
 <template>
-  <div class="app">
+  <div class="app" :style="{ '--center-column-height': centerColumnHeight }">
     <aside>
       <div class="brand">
         Beauty Trust Check
@@ -20,7 +20,7 @@
       </div>
     </aside>
 
-    <main>
+    <main ref="centerColumn">
       <div class="topbar">
         <div>
           <h1>{{ config.pageTitle }}</h1>
@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 
 const modes = {
   "makeup-single": {
@@ -161,6 +161,10 @@ const modes = {
 const modeList = Object.entries(modes).map(([key, value]) => ({ key, ...value }));
 const currentMode = ref("makeup-single");
 const loading = ref(false);
+const centerColumn = ref(null);
+const centerColumnHeight = ref("100vh");
+let centerResizeObserver = null;
+let updateCenterHeight = () => {};
 const stores = reactive(
   Object.fromEntries(
     Object.keys(modes).map((mode) => [
@@ -183,6 +187,9 @@ const canAnalyze = computed(() => inputCount.value === config.value.slots);
 const activePayload = computed(() => store.value.result);
 const activeModel = computed(() => activePayload.value?.model_output || activePayload.value?.after_model_output || {});
 const activeVisual = computed(() => activePayload.value?.visual_evidence || {});
+const activeUnified = computed(
+  () => activePayload.value?.beautyproof_unified?.result || activePayload.value?.after_beautyproof_unified?.result || null,
+);
 const confidence = computed(() => Math.round((activePayload.value?.false_advertising_confidence || 0) * 100));
 const scoreText = computed(() => (activePayload.value ? `${confidence.value}%` : "--"));
 const meterWidth = computed(() => (activePayload.value ? `${confidence.value}%` : "0"));
@@ -205,12 +212,24 @@ const evidenceItems = computed(() => {
   if (!activePayload.value) return [];
   const model = activeModel.value;
   const visual = activeVisual.value;
+  const unified = activeUnified.value;
   const aiLabel = model.label === "ai" ? "是" : model.label === "real" ? "否" : "未知";
   const items = [
     `AI生成检测：${aiLabel}，AI概率 ${formatPercent(model.probability_ai)}，backend=${model.backend || "N/A"}，mock=${Boolean(model.mock)}。`,
-    `BeautyProof修图检测：修图概率 ${formatPercent(visual.retouch_probability)}，可靠性 ${visual.reliability || "N/A"}。`,
+    `BeautyProof修图检测：修图概率 ${formatPercent(visual.retouch_probability)}，可靠性 ${visual.reliability || "N/A"}，model=${visual.model_version || "N/A"}。`,
     ...(activePayload.value.evidence || []),
   ];
+  if (unified) {
+    items.push(
+      `Unified结论：retouched=${Boolean(unified.retouched)}，strength=${unified.retouch_strength || "none"}，region_status=${unified.region_status || "N/A"}。`,
+    );
+    if (unified.retouch_types?.length) {
+      items.push(`类型输出：${unified.retouch_types.map((item) => `${item.name} ${formatPercent(item.probability)}`).join("，")}。`);
+    }
+    if (unified.modified_regions?.length) {
+      items.push(`区域输出：${unified.modified_regions.map((item) => `${item.name} ${formatPercent(item.confidence)}`).join("，")}。`);
+    }
+  }
   if (activePayload.value.before_after_evidence) {
     items.push(
       `前后对比：可靠性 ${activePayload.value.before_after_evidence.comparison_reliability}，曝光差异 ${activePayload.value.before_after_evidence.exposure_diff}。`,
@@ -283,6 +302,22 @@ function formatPercent(value) {
   if (typeof value !== "number") return "N/A";
   return `${Math.round(value * 1000) / 10}%`;
 }
+
+onMounted(() => {
+  updateCenterHeight = () => {
+    if (!centerColumn.value) return;
+    centerColumnHeight.value = `${Math.ceil(centerColumn.value.offsetHeight)}px`;
+  };
+  updateCenterHeight();
+  centerResizeObserver = new ResizeObserver(updateCenterHeight);
+  centerResizeObserver.observe(centerColumn.value);
+  window.addEventListener("resize", updateCenterHeight);
+});
+
+onBeforeUnmount(() => {
+  if (centerResizeObserver) centerResizeObserver.disconnect();
+  window.removeEventListener("resize", updateCenterHeight);
+});
 </script>
 
 <style>
@@ -315,9 +350,10 @@ body {
 }
 
 .app {
-  min-height: 100vh;
+  min-height: max(100vh, var(--center-column-height));
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 390px;
+  align-items: stretch;
 }
 
 aside {
@@ -327,6 +363,7 @@ aside {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-height: max(100vh, var(--center-column-height));
 }
 
 .brand {
@@ -543,8 +580,10 @@ button.secondary {
   border-left: 1px solid var(--line);
   padding: 24px 20px;
   overflow-y: auto;
-  max-height: 100vh;
+  height: max(100vh, var(--center-column-height));
+  max-height: max(100vh, var(--center-column-height));
   color: var(--ink);
+  align-self: start;
 }
 
 .score-box {
@@ -699,6 +738,7 @@ button.secondary {
   }
 
   .result {
+    height: auto;
     max-height: none;
     border-left: 0;
     border-top: 1px solid var(--line);

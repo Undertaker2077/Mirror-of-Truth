@@ -28,6 +28,7 @@ class ApiSmokeTest(unittest.TestCase):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
+        self.assertIn("beautyproof_unified", response.json())
 
     def test_single_image_analysis(self):
         response = self.client.post(
@@ -38,6 +39,7 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("false_advertising_confidence", payload)
+        self.assertIn("beautyproof_unified", payload)
         self.assertIn("visual_evidence", payload)
         self.assertGreaterEqual(payload["visual_evidence"]["integrity_score"], 0)
         self.assertLessEqual(payload["visual_evidence"]["integrity_score"], 1)
@@ -46,6 +48,14 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertNotIn("before_model_output", payload)
         self.assertNotIn("after_model_output", payload)
         self.assertNotIn("before_after_evidence", payload)
+
+    def test_unified_route_requires_real_model_env(self):
+        response = self.client.post(
+            "/api/beautyproof/unified/analyze",
+            files={"image": ("beauty_retouched.png", tiny_png(), "image/png")},
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("BEAUTYPROOF_USE_UNIFIED=1", response.json()["detail"])
 
     def test_beautyproof_v2_contract(self):
         response = self.client.post(

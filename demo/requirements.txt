@@ -6,4 +6,6 @@ numpy
 torch
 torchvision
 mmengine
+opencv-python-headless
+ultralytics
 -e vendor/ai-image-detector[api]
