@@ -1,0 +1,15 @@
+{
+  "typed_hard_negative": {
+    "accuracy": 0.9625,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "auroc": "not_available",
+    "tn": 77,
+    "fp": 3,
+    "fn": 0,
+    "tp": 0,
+    "fpr": 0.0375
+  },
+  "independent_real_retouch": "not_available"
+}
