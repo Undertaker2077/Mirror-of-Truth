@@ -1,8 +1,8 @@
 # Mirror of Truth Demo
 
 Part B frontend/backend demo for visual false-advertising risk detection.
-The primary MVP model route is BeautyProof Unified API, with BeautyProof V2
-smoke fallback for local UI demos.
+The MVP route combines AIDE AI-generation detection, BeautyProof Unified
+retouch detection, and MediaPipe before/after face alignment.
 
 ## Run
 
@@ -11,7 +11,7 @@ cd Mirror-of-Truth-demo
 python3 -m pip install -r requirements.txt
 npm install --ignore-scripts
 npm run build
-MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=.. MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
 Open:
@@ -92,6 +92,31 @@ npm run build
 MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
+## Model Assets
+
+Large model files are intentionally delivered outside GitHub. After cloning the
+repo, unpack the model asset tarball from the repository root:
+
+```bash
+tar -xf mirror_of_truth_model_assets_20260906.tar -C Mirror-of-Truth
+```
+
+The unpacked layout should be:
+
+```text
+Mirror-of-Truth/
+  models/
+    retouch_detector_v2/best_model.pt
+    retouch_three_type_v1/best_model.pt
+    yolo_retouch_regions_v1/best.pt
+  demo/
+    models/
+      aide/aide.pth
+      aide/resnet50.pth
+      aide/open_clip_pytorch_model.bin
+      face_landmarker.task
+```
+
 ## BeautyProof Unified Model
 
 The demo can call your friend's unified package:
@@ -109,7 +134,7 @@ Mirror-of-Truth/
   beautyproof_api/
   models/
     retouch_detector_v2/best_model.pt
-    retouch_multitask_cnn_v1/best_model.pt
+    retouch_three_type_v1/best_model.pt
     yolo_retouch_regions_v1/best.pt
   demo/
 ```
@@ -169,10 +194,18 @@ BEAUTYPROOF_USE_REAL=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --po
 
 ## Real AI Detector
 
-The vendored detector is in:
+The primary AI-generation detector is AIDE. Its source is vendored in:
 
 ```text
-vendor/ai-image-detector
+vendor/AIDE
+```
+
+Its large weights must exist at:
+
+```text
+models/aide/aide.pth
+models/aide/resnet50.pth
+models/aide/open_clip_pytorch_model.bin
 ```
 
 Install dependencies:
@@ -187,7 +220,8 @@ Start with real model loading:
 MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
-First real-model use may download Hugging Face weights and can take several minutes.
+The older `vendor/ai-image-detector` integration remains available only as a
+fallback by passing `backend=ultra`.
 
 ## Smoke Test
 
@@ -195,6 +229,6 @@ First real-model use may download Hugging Face weights and can take several minu
 python3 -m unittest discover -s tests
 curl -s http://127.0.0.1:8765/api/health
 curl -s -F image=@vendor/ai-image-detector/test_images/ai_retouched.png http://127.0.0.1:8765/api/beautyproof/v2/detect
-curl -s -F image=@vendor/ai-image-detector/test_images/ai-generated.png -F mode=makeup -F backend=ultra http://127.0.0.1:8765/api/analyze/single
-curl -s -F before_image=@vendor/ai-image-detector/test_images/human.jpeg -F after_image=@vendor/ai-image-detector/test_images/ai_retouched.png -F backend=ultra http://127.0.0.1:8765/api/analyze/before-after
+curl -s -F image=@vendor/ai-image-detector/test_images/ai-generated.png -F mode=makeup -F backend=aide http://127.0.0.1:8765/api/analyze/single
+curl -s -F before_image=@vendor/ai-image-detector/test_images/human.jpeg -F after_image=@vendor/ai-image-detector/test_images/ai_retouched.png -F backend=aide http://127.0.0.1:8765/api/analyze/before-after
 ```

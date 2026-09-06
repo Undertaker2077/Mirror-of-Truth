@@ -19,3 +19,6 @@ demo/frontend/dist/
 demo/models/aide/*.pth
 demo/models/aide/*.bin
 demo/models/face_landmarker.task
+demo/{{pkgetc}}/
+_backup_before_latest_model_*/
+models/retouch_three_type_v1/*.pt
