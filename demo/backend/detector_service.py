@@ -36,11 +36,28 @@ def _direction_text(label: str, signed_delta: float) -> str:
     return f"After 比 Before {direction} {magnitude:.1%}"
 
 
-def combined_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
+def combined_fashion_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
     ai = _clamp(ai_prob) ** 1.6
     retouch = _clamp(retouch_prob) ** 1.6
     heuristic = _clamp(heuristic_prob) ** 1.6
     return _clamp(1.0 - ((1.0 - ai) ** 1.3) * ((1.0 - retouch) ** 1.6) * ((1.0 - heuristic) ** 0.5))
+
+
+def combined_makeup_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
+    ai = _clamp(ai_prob)
+    retouch = _clamp(retouch_prob)
+    heuristic = _clamp(heuristic_prob)
+    base_beauty_risk = _clamp(
+        0.55 * (retouch ** 1.25)
+        + 0.22 * (heuristic ** 1.15)
+        + 0.10 * ((retouch * heuristic) ** 0.80)
+    )
+    ai_discount = 1.0 - 0.45 * (ai ** 1.20)
+    return _clamp(base_beauty_risk * ai_discount)
+
+
+def combined_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
+    return combined_fashion_single_false_ad_risk(ai_prob, retouch_prob, heuristic_prob)
 
 
 def combined_before_after_false_ad_risk(
@@ -338,11 +355,20 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
     beautyproof_score = (
         float(visual_evidence["integrity_score"]) if visual_evidence else float(retouch["retouch_score"])
     )
-    confidence = combined_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
+    if mode == "makeup":
+        confidence = combined_makeup_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
+        risk_formula = (
+            "(0.55*retouch^1.25 + 0.22*heuristic^1.15 + "
+            "0.10*(retouch*heuristic)^0.80) * (1 - 0.45*ai^1.20)"
+        )
+    else:
+        confidence = combined_fashion_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
+        risk_formula = "1 - (1 - ai^1.6)^1.3 * (1 - retouch^1.6)^1.6 * (1 - heuristic^1.6)^0.5"
     if mode == "makeup":
         evidence = [
             "单图只能判断 AI/后期/美颜风险，不能直接证明某个化妆品功效。",
             "若图片存在磨皮、提亮、滤镜或五官调整，化妆品功效归因应判为 CONFOUNDED。",
+            "妆造单图风险公式以 BeautyProof 修图概率和基础美颜信号为主；AI 生成概率越高，越降低妆效归因置信度。",
         ]
     else:
         evidence = [
@@ -377,7 +403,7 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
         "mode": mode,
         "verdict": "High risk" if confidence >= 0.65 else "Medium risk" if confidence >= 0.30 else "Low risk",
         "false_advertising_confidence": _rounded(confidence),
-        "risk_formula": "1 - (1 - ai^1.6)^1.3 * (1 - retouch^1.6)^1.6 * (1 - heuristic^1.6)^0.5",
+        "risk_formula": risk_formula,
         "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.30 else "INSUFFICIENT",
         "beautyproof_unified": beautyproof_unified,
         "beautyproof_v2": legacy_beautyproof,
