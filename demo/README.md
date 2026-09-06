@@ -106,9 +106,7 @@ The unpacked layout should be:
 ```text
 Mirror-of-Truth/
   models/
-    retouch_detector_v2/best_model.pt
     retouch_three_type_v1/best_model.pt
-    yolo_retouch_regions_v1/best.pt
   demo/
     models/
       aide/aide.pth
@@ -116,6 +114,10 @@ Mirror-of-Truth/
       aide/open_clip_pytorch_model.bin
       face_landmarker.task
 ```
+
+The repo already contains the existing BeautyProof V2 and YOLO model paths used
+by the unified API. The external tarball mainly supplies the large AIDE assets,
+MediaPipe landmarker, and the new three-type classifier checkpoint.
 
 ## BeautyProof Unified Model
 
