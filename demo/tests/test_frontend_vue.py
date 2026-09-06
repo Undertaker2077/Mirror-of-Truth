@@ -19,7 +19,7 @@ class FrontendVueSmokeTest(unittest.TestCase):
         self.assertIn('v-if="config.slots === 2"', app_vue)
         self.assertIn('v-model="aiBackend"', app_vue)
         self.assertIn('value="hf3"', app_vue)
-        self.assertIn('value="aide"', app_vue)
+        self.assertNotIn('value="aide"', app_vue)
         self.assertNotIn("mockAnalyze", app_vue)
 
 

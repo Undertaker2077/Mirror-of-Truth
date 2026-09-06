@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import io
 import os
 import sys
@@ -10,7 +9,6 @@ from typing import Any
 
 from PIL import Image, ImageFilter, ImageStat
 
-from .aide_detector import AIDEGenerationDetector
 from .beautyproof_v2 import BeautyProofV2Service
 from .face_alignment_mediapipe import compare_before_after_faces
 from .hf_three_way_detector import HuggingFaceThreeWayAIDetector
@@ -19,18 +17,6 @@ from .unified_beautyproof import UnifiedBeautyProofService
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VENDOR_DETECTOR = PROJECT_ROOT / "vendor" / "ai-image-detector"
-MAKEUP_SINGLE_AI_PROBABILITY_OVERRIDES_BY_SHA256 = {
-    "ac4dccaaf1aae720b74f4fe06c8a20f28042b895fb8a3191f44026689457bcc4": 0.121,
-    "c5e29f85584e82371c7d70b64dbbc79c3aca74708389dfd210cc133ce2ee78fc": 0.967,
-    "553f15353bfac3e45980cc78c93b81811b6a0ddae0d8823efd6a2a008f6f2994": 0.178,
-    "41a42f791703b00cfd16157fe2f45d840d816ca85ae98759f7cdb2ae374f8a07": 0.324,
-    "1f645b041d4ba9a755acde6720265536e8e7b2faa167020a0975fe44c0335917": 0.855,
-}
-FASHION_SINGLE_AI_PROBABILITY_OVERRIDES_BY_SHA256 = {
-    "e1e160966b86c270b0e679558fcd3da2e2bcf6809140064a540b0da64628a0de": 0.334,
-    "27618c55d4ca5bf6577858c6cf6e8d70054842c2cd720b5faf4da34ad41251f3": 0.780,
-    "098d714d40bab5a591bf5e0ddcaa80bd3270f1b9b70660386b924fb956c05a43": 0.926,
-}
 
 
 def _clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
@@ -47,58 +33,6 @@ def _direction_text(label: str, signed_delta: float) -> str:
         return f"{label}基本一致"
     direction = "高" if signed_delta > 0 else "低"
     return f"After 比 Before {direction} {magnitude:.1%}"
-
-
-def apply_makeup_single_ai_override(
-    model: dict[str, Any],
-    image_bytes: bytes,
-) -> dict[str, Any]:
-    digest = hashlib.sha256(image_bytes).hexdigest()
-    probability_ai = MAKEUP_SINGLE_AI_PROBABILITY_OVERRIDES_BY_SHA256.get(digest)
-    if probability_ai is None:
-        return model
-
-    return apply_ai_probability_override(
-        model,
-        probability_ai,
-        scope="makeup-single",
-    )
-
-
-def apply_fashion_single_ai_override(
-    model: dict[str, Any],
-    filename: str | None,
-    image_bytes: bytes,
-) -> dict[str, Any]:
-    digest = hashlib.sha256(image_bytes).hexdigest()
-    probability_ai = FASHION_SINGLE_AI_PROBABILITY_OVERRIDES_BY_SHA256.get(digest)
-    if probability_ai is None:
-        return model
-
-    return apply_ai_probability_override(model, probability_ai, scope="fashion-single")
-
-
-def apply_ai_probability_override(model: dict[str, Any], probability_ai: float, *, scope: str) -> dict[str, Any]:
-    overridden = dict(model)
-    probability_real = 1.0 - probability_ai
-    threshold = float(overridden.get("threshold", 0.3))
-    overridden.update(
-        {
-            "label": "ai" if probability_ai >= threshold else "real",
-            "probability_ai": _rounded(probability_ai),
-            "probability_real": _rounded(probability_real),
-            "confidence": _rounded(max(probability_ai, probability_real)),
-            "raw_score": _rounded(probability_ai - threshold),
-            "pre_override_probability_ai": model.get("probability_ai"),
-            "pre_override_label": model.get("label"),
-            "demo_override": {
-                "scope": scope,
-                "field": "probability_ai",
-                "reason": f"fixed demo sample score requested for {scope} mode",
-            },
-        }
-    )
-    return overridden
 
 
 def combined_fashion_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
@@ -237,15 +171,6 @@ class AIDetectorService:
                     image_bytes,
                     filename,
                     unavailable_reason=f"HuggingFace three-way detector unavailable: {exc}",
-                )
-        if self.backend == "aide":
-            try:
-                return AIDEGenerationDetector().detect(image_bytes, filename)
-            except Exception as exc:  # noqa: BLE001
-                return self._mock_detection(
-                    image_bytes,
-                    filename,
-                    unavailable_reason=f"AIDE detector unavailable: {exc}",
                 )
         if self.real_model_enabled:
             try:
@@ -418,11 +343,6 @@ def enrich_with_face_alignment(
 
 def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, backend: str) -> dict[str, Any]:
     model = AIDetectorService(backend=backend).detect(image_bytes, filename)
-    uses_aide_demo_backend = backend == "aide"
-    if uses_aide_demo_backend and mode == "makeup":
-        model = apply_makeup_single_ai_override(model, image_bytes)
-    elif uses_aide_demo_backend and mode == "fashion":
-        model = apply_fashion_single_ai_override(model, filename, image_bytes)
     beautyproof_unified = UnifiedBeautyProofService().predict_bytes(image_bytes, filename)
     legacy_beautyproof = None
     visual_evidence = beautyproof_unified.get("visual_evidence")

@@ -72,7 +72,6 @@
                 <span>AI模型</span>
                 <select v-model="aiBackend">
                   <option value="hf3">AI / Deepfake / Real</option>
-                  <option value="aide">AIDE 原模型</option>
                   <option value="ultra">Lynote fallback</option>
                 </select>
               </label>

@@ -27,10 +27,12 @@ without pretending that real inference has already run.
 
 ## AI Detector Integration
 
-The vendored `lynote-ai/ai-image-detector` project is kept under `vendor/ai-image-detector`.
-The backend adapter uses its documented Python API when `MIRROR_USE_REAL_AIDETECTOR=1`.
-For development smoke tests, the adapter falls back to a deterministic mock response so
-frontend/backend wiring can be verified without waiting for model dependencies or remote weights.
+The default AI detector is the HuggingFace AI/Deepfake/Real classifier exposed through
+`backend=hf3`. It returns `probability_ai` plus `probability_artificial`,
+`probability_deepfake`, and `probability_real`. The vendored
+`lynote-ai/ai-image-detector` project remains under `vendor/ai-image-detector` only as
+the `backend=ultra` fallback. For development smoke tests, failed model loading returns
+a deterministic mock response so frontend/backend wiring can still be verified.
 
 ## API
 
@@ -39,9 +41,9 @@ frontend/backend wiring can be verified without waiting for model dependencies o
   - form fields: `image`
   - returns: `{ "visual_evidence": ... }`
 - `POST /api/analyze/single`
-  - form fields: `image`, `mode=makeup|fashion`, `backend=ultra`
+  - form fields: `image`, `mode=makeup|fashion`, `backend=hf3|ultra`
 - `POST /api/analyze/before-after`
-  - form fields: `before_image`, `after_image`, `backend=ultra`
+  - form fields: `before_image`, `after_image`, `backend=hf3|ultra`
 
 ## Output Contract
 
@@ -58,10 +60,10 @@ The frontend renders:
 
 ## Real Model Setup
 
-Install the detector package if real inference is needed:
+Install dependencies and start the demo:
 
 ```bash
 cd /Users/maoyiqi/Downloads/Mirror-of-Truth-demo
-python3 -m pip install -e 'vendor/ai-image-detector[api]'
-MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+python3 -m pip install -r requirements.txt
+BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=/Users/maoyiqi/Downloads/Mirror-of-Truth python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```

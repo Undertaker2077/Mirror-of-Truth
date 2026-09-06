@@ -8,7 +8,6 @@ torchvision
 transformers
 huggingface-hub
 open-clip-torch
-mmengine
 mediapipe
 opencv-python-headless
 ultralytics

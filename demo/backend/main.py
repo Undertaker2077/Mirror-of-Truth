@@ -7,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .aide_detector import aide_status
 from .beautyproof_v2 import CHECKPOINT_CANDIDATES, HEATMAP_ROOT, BeautyProofV2Service
 from .detector_service import build_before_after_analysis, build_single_analysis
 from .face_alignment_mediapipe import ALIGNED_ROOT, face_alignment_status
@@ -65,11 +64,10 @@ def health() -> dict:
         },
         "beautyproof_unified": unified_status(),
         "ai_detector_repo_present": VENDOR_DIR.exists(),
-        "aide_detector": aide_status(),
         "hf_three_way_detector": hf_three_way_status(),
         "face_alignment": face_alignment_status(),
-        "real_detector_env": "Use backend=hf3 for HuggingFace AI/Deepfake/Real, backend=aide for original AIDE, or backend=ultra with MIRROR_USE_REAL_AIDETECTOR=1 for lynote-ai fallback",
-        "supported_ai_backends": ["hf3", "aide", "ultra"],
+        "real_detector_env": "Use backend=hf3 for HuggingFace AI/Deepfake/Real, or backend=ultra with MIRROR_USE_REAL_AIDETECTOR=1 for lynote-ai fallback",
+        "supported_ai_backends": ["hf3", "ultra"],
         "supported_modes": ["beautyproof_unified", "beautyproof_v2", "makeup_single", "fashion_single", "before_after"],
     }
 

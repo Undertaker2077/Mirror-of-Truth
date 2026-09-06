@@ -76,13 +76,7 @@ class ApiSmokeTest(unittest.TestCase):
             response = self.client.post(
                 "/api/analyze/single",
                 data={"mode": "makeup", "backend": "hf3"},
-                files={
-                    "image": (
-                        "Picture2.png",
-                        Path("/Users/maoyiqi/Downloads/demo-samples/sample1/Picture2.png").read_bytes(),
-                        "image/png",
-                    )
-                },
+                files={"image": ("test.png", tiny_png(), "image/png")},
             )
         self.assertEqual(response.status_code, 200)
         payload = response.json()

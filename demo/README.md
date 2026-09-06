@@ -2,8 +2,7 @@
 
 Part B frontend/backend demo for visual false-advertising risk detection.
 The MVP route combines HuggingFace AI/Deepfake/Real detection, BeautyProof
-Unified retouch detection, and MediaPipe before/after face alignment. AIDE is
-kept as a backup AI detector.
+Unified retouch detection, and MediaPipe before/after face alignment.
 
 ## Run
 
@@ -12,7 +11,7 @@ cd Mirror-of-Truth-demo
 python3 -m pip install -r requirements.txt
 npm install --ignore-scripts
 npm run build
-BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=.. MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=.. python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
 Open:
@@ -90,35 +89,23 @@ Production build served by FastAPI:
 
 ```bash
 npm run build
-MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=.. python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
 ## Model Assets
 
-Large model files are intentionally delivered outside GitHub. After cloning the
-repo, unpack the model asset tarball from the repository root:
-
-```bash
-tar -xf mirror_of_truth_model_assets_20260906.tar -C Mirror-of-Truth
-```
-
-The unpacked layout should be:
+The BeautyProof model weights are stored in the repository under `models/`.
+The optional MediaPipe FaceLandmarker task file should be placed at:
 
 ```text
 Mirror-of-Truth/
-  models/
-    retouch_three_type_v1/best_model.pt
   demo/
     models/
-      aide/aide.pth
-      aide/resnet50.pth
-      aide/open_clip_pytorch_model.bin
       face_landmarker.task
 ```
 
-The repo already contains the existing BeautyProof V2 and YOLO model paths used
-by the unified API. The external tarball mainly supplies the large AIDE assets,
-MediaPipe landmarker, and the new three-type classifier checkpoint.
+If `demo/models/face_landmarker.task` is missing, download it with the command
+shown in the face alignment section above.
 
 ## BeautyProof Unified Model
 
@@ -151,7 +138,7 @@ export BEAUTYPROOF_API_PATH=/path/to/Mirror-of-Truth
 Start with unified model loading enabled:
 
 ```bash
-BEAUTYPROOF_USE_UNIFIED=1 MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=.. python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
 Direct unified routes:
@@ -213,35 +200,22 @@ It returns the binary-compatible `probability_ai` field plus three-way details:
 `raw_label`, `probability_artificial`, `probability_deepfake`, and
 `probability_real`.
 
-The original AIDE detector is still available as a backup:
-
-```text
-vendor/AIDE
-```
-
-Its large weights must exist at:
-
-```text
-models/aide/aide.pth
-models/aide/resnet50.pth
-models/aide/open_clip_pytorch_model.bin
-```
-
 Install dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-Start with real model loading:
+Start the demo:
 
 ```bash
-MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+BEAUTYPROOF_USE_UNIFIED=1 BEAUTYPROOF_API_PATH=.. python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
-Frontend defaults to `hf3`; switch the AI model selector to `AIDE 原模型` if
-the HuggingFace model cannot be loaded. The older `vendor/ai-image-detector`
-integration remains available only as a fallback by passing `backend=ultra`.
+Frontend defaults to `hf3`. The older `vendor/ai-image-detector` integration
+remains available only as a fallback by passing `backend=ultra` with
+`MIRROR_USE_REAL_AIDETECTOR=1`; otherwise it returns the deterministic smoke
+fallback.
 
 ## Smoke Test
 
