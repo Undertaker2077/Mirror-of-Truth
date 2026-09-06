@@ -27,10 +27,13 @@ class ScoringFormulaTest(unittest.TestCase):
         ai_risk = combined_makeup_single_false_ad_risk(0.90, 0.10, 0.10)
         retouch_risk = combined_makeup_single_false_ad_risk(0.10, 0.90, 0.20)
         combined_risk = combined_makeup_single_false_ad_risk(0.792, 0.308, 0.20)
+        borderline_ai_low_retouch = combined_makeup_single_false_ad_risk(0.488, 0.022, 0.445)
         low_risk = combined_makeup_single_false_ad_risk(0.05, 0.10, 0.10)
         self.assertGreater(ai_risk, 0.65)
         self.assertGreater(retouch_risk, 0.65)
         self.assertGreater(combined_risk, 0.65)
+        self.assertGreater(borderline_ai_low_retouch, 0.30)
+        self.assertLess(borderline_ai_low_retouch, 0.40)
         self.assertLess(low_risk, 0.30)
 
     def test_fashion_single_formula_weights_ai_more_heavily(self):

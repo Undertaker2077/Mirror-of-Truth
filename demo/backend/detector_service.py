@@ -51,11 +51,12 @@ def combined_makeup_single_false_ad_risk(ai_prob: float, retouch_prob: float, he
     ai = _clamp(ai_prob)
     retouch = _clamp(retouch_prob)
     heuristic = _clamp(heuristic_prob)
+    ai_signal = _clamp((ai - 0.15) / 0.85) ** 1.35
     return _clamp(
         1.0
-        - ((1.0 - ai ** 1.3) ** 1.25)
-        * ((1.0 - retouch ** 1.3) ** 1.25)
-        * ((1.0 - heuristic ** 1.5) ** 0.35)
+        - (1.0 - ai_signal)
+        * ((1.0 - retouch ** 1.15) ** 1.20)
+        * ((1.0 - heuristic ** 1.60) ** 0.25)
     )
 
 
@@ -372,8 +373,8 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
     if mode == "makeup":
         confidence = combined_makeup_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
         risk_formula = (
-            "1 - (1 - ai^1.3)^1.25 * (1 - retouch^1.3)^1.25 * "
-            "(1 - heuristic^1.5)^0.35"
+            "1 - (1 - clamp((ai-0.15)/0.85)^1.35) * "
+            "(1 - retouch^1.15)^1.20 * (1 - heuristic^1.60)^0.25"
         )
     else:
         confidence = combined_fashion_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
@@ -382,7 +383,7 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
         evidence = [
             "单图只能判断 AI/后期/美颜风险，不能直接证明某个化妆品功效。",
             "若图片存在磨皮、提亮、滤镜或五官调整，化妆品功效归因应判为 CONFOUNDED。",
-            "妆造单图使用 noisy-OR 风险公式：AI 生成概率或修图概率任一较高，都会抬高总体风险。",
+            "妆造单图使用保守 noisy-OR 风险公式：边界 AI 分数会先降敏，高 AI 或高修图仍会抬高总体风险。",
         ]
     else:
         evidence = [
