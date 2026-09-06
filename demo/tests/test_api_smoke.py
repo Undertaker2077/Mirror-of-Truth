@@ -127,6 +127,25 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(payload["risk_breakdown"]["weights"]["beautification_delta"], 0.40)
         self.assertEqual(payload["after_model_output"]["label"], "ai")
 
+    def test_before_after_hf3_fallback_does_not_500(self):
+        with patch(
+            "backend.detector_service.HuggingFaceThreeWayAIDetector.detect",
+            side_effect=RuntimeError("hf unavailable"),
+        ):
+            response = self.client.post(
+                "/api/analyze/before-after",
+                data={"backend": "hf3"},
+                files={
+                    "before_image": ("before.png", tiny_png((120, 115, 112)), "image/png"),
+                    "after_image": ("after.png", tiny_png((235, 225, 215)), "image/png"),
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["before_model_output"]["mock"])
+        self.assertTrue(payload["after_model_output"]["mock"])
+        self.assertIn("HuggingFace three-way detector unavailable", payload["before_model_output"]["unavailable_reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

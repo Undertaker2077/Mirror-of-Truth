@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PIL import UnidentifiedImageError
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -133,10 +134,19 @@ async def analyze_before_after(
 ) -> dict:
     before_bytes = await before_image.read()
     after_bytes = await after_image.read()
-    return build_before_after_analysis(
-        before_bytes,
-        after_bytes,
-        before_image.filename,
-        after_image.filename,
-        backend,
-    )
+    if not before_bytes or not after_bytes:
+        raise HTTPException(status_code=400, detail="before_image and after_image are required")
+    if len(before_bytes) > MAX_UPLOAD_BYTES or len(after_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="image exceeds 10 MiB limit")
+    try:
+        return build_before_after_analysis(
+            before_bytes,
+            after_bytes,
+            before_image.filename,
+            after_image.filename,
+            backend,
+        )
+    except (UnidentifiedImageError, ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=f"before-after image is unreadable: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"before-after analysis unavailable: {exc}") from exc
