@@ -5,6 +5,8 @@ python-multipart
 numpy
 torch
 torchvision
+transformers
+huggingface-hub
 open-clip-torch
 mmengine
 mediapipe

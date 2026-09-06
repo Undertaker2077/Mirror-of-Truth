@@ -1,8 +1,9 @@
 # Mirror of Truth Demo
 
 Part B frontend/backend demo for visual false-advertising risk detection.
-The MVP route combines AIDE AI-generation detection, BeautyProof Unified
-retouch detection, and MediaPipe before/after face alignment.
+The MVP route combines HuggingFace AI/Deepfake/Real detection, BeautyProof
+Unified retouch detection, and MediaPipe before/after face alignment. AIDE is
+kept as a backup AI detector.
 
 ## Run
 
@@ -196,7 +197,23 @@ BEAUTYPROOF_USE_REAL=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --po
 
 ## Real AI Detector
 
-The primary AI-generation detector is AIDE. Its source is vendored in:
+The default AI-generation detector is:
+
+```text
+prithivMLmods/AI-vs-Deepfake-vs-Real
+```
+
+Use it with:
+
+```text
+backend=hf3
+```
+
+It returns the binary-compatible `probability_ai` field plus three-way details:
+`raw_label`, `probability_artificial`, `probability_deepfake`, and
+`probability_real`.
+
+The original AIDE detector is still available as a backup:
 
 ```text
 vendor/AIDE
@@ -222,8 +239,9 @@ Start with real model loading:
 MIRROR_USE_REAL_AIDETECTOR=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
 ```
 
-The older `vendor/ai-image-detector` integration remains available only as a
-fallback by passing `backend=ultra`.
+Frontend defaults to `hf3`; switch the AI model selector to `AIDE 原模型` if
+the HuggingFace model cannot be loaded. The older `vendor/ai-image-detector`
+integration remains available only as a fallback by passing `backend=ultra`.
 
 ## Smoke Test
 
@@ -231,6 +249,6 @@ fallback by passing `backend=ultra`.
 python3 -m unittest discover -s tests
 curl -s http://127.0.0.1:8765/api/health
 curl -s -F image=@vendor/ai-image-detector/test_images/ai_retouched.png http://127.0.0.1:8765/api/beautyproof/v2/detect
-curl -s -F image=@vendor/ai-image-detector/test_images/ai-generated.png -F mode=makeup -F backend=aide http://127.0.0.1:8765/api/analyze/single
-curl -s -F before_image=@vendor/ai-image-detector/test_images/human.jpeg -F after_image=@vendor/ai-image-detector/test_images/ai_retouched.png -F backend=aide http://127.0.0.1:8765/api/analyze/before-after
+curl -s -F image=@vendor/ai-image-detector/test_images/ai-generated.png -F mode=makeup -F backend=hf3 http://127.0.0.1:8765/api/analyze/single
+curl -s -F before_image=@vendor/ai-image-detector/test_images/human.jpeg -F after_image=@vendor/ai-image-detector/test_images/ai_retouched.png -F backend=hf3 http://127.0.0.1:8765/api/analyze/before-after
 ```

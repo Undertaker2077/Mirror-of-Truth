@@ -68,6 +68,14 @@
             </div>
 
             <div class="actions">
+              <label class="model-select">
+                <span>AI模型</span>
+                <select v-model="aiBackend">
+                  <option value="hf3">AI / Deepfake / Real</option>
+                  <option value="aide">AIDE 原模型</option>
+                  <option value="ultra">Lynote fallback</option>
+                </select>
+              </label>
               <button class="secondary" type="button" @click="resetCurrent">清空</button>
               <button class="secondary" type="button" @click="exitDetection">退出检测</button>
               <button class="primary" type="button" :disabled="!canAnalyze || loading" @click="analyze">
@@ -168,6 +176,7 @@ const modes = {
 
 const modeList = Object.entries(modes).map(([key, value]) => ({ key, ...value }));
 const currentMode = ref("makeup-single");
+const aiBackend = ref("hf3");
 const loading = ref(false);
 const centerColumn = ref(null);
 const centerColumnHeight = ref("100vh");
@@ -251,6 +260,11 @@ const evidenceItems = computed(() => {
       `AI模型：${model.model_name}，checkpoint=${model.checkpoint || "N/A"}，source=${model.source || "N/A"}。`,
     );
   }
+  if (model.raw_label && activePayload.value.mode !== "before_after") {
+    items.push(
+      `三分类输出：${model.raw_label}，Artificial ${formatPercent(model.probability_artificial)}，Deepfake ${formatPercent(model.probability_deepfake)}，Real ${formatPercent(model.probability_real)}。`,
+    );
+  }
   if (unified) {
     items.push(
       `Unified结论：retouched=${Boolean(unified.retouched)}，strength=${unified.retouch_strength || "none"}，region_status=${unified.region_status || "N/A"}。`,
@@ -315,13 +329,13 @@ async function analyze() {
       const form = new FormData();
       form.append("image", current.files.A);
       form.append("mode", config.value.apiMode);
-      form.append("backend", "aide");
+      form.append("backend", aiBackend.value);
       response = await fetch("/api/analyze/single", { method: "POST", body: form });
     } else {
       const form = new FormData();
       form.append("before_image", current.files.A);
       form.append("after_image", current.files.B);
-      form.append("backend", "aide");
+      form.append("backend", aiBackend.value);
       response = await fetch("/api/analyze/before-after", { method: "POST", body: form });
     }
     if (!response.ok) throw new Error(`接口错误 ${response.status}`);
@@ -594,7 +608,29 @@ h1 {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   margin-top: 14px;
+}
+
+.model-select {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.model-select select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  padding: 0 10px;
+  font-weight: 700;
 }
 
 button.primary,

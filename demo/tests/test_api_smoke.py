@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -48,6 +49,39 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertNotIn("before_model_output", payload)
         self.assertNotIn("after_model_output", payload)
         self.assertNotIn("before_after_evidence", payload)
+
+    def test_single_image_analysis_accepts_hf3_backend(self):
+        fake_detection = {
+            "path": None,
+            "filename": "test.png",
+            "label": "ai",
+            "probability_ai": 0.82,
+            "probability_real": 0.18,
+            "confidence": 0.82,
+            "raw_score": 0.32,
+            "backend": "hf-ai-deepfake-real",
+            "status": "ok",
+            "mock": False,
+            "source": "prithivMLmods/AI-vs-Deepfake-vs-Real",
+            "model_name": "AI-vs-Deepfake-vs-Real",
+            "checkpoint": "prithivMLmods/AI-vs-Deepfake-vs-Real",
+            "threshold": 0.5,
+            "schema_version": "ai_detector.v1",
+            "raw_label": "Artificial",
+            "probability_artificial": 0.70,
+            "probability_deepfake": 0.12,
+            "class_probabilities": {"Artificial": 0.70, "Deepfake": 0.12, "Real": 0.18},
+        }
+        with patch("backend.detector_service.HuggingFaceThreeWayAIDetector.detect", return_value=fake_detection):
+            response = self.client.post(
+                "/api/analyze/single",
+                data={"mode": "makeup", "backend": "hf3"},
+                files={"image": ("test.png", tiny_png(), "image/png")},
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["model_output"]["backend"], "hf-ai-deepfake-real")
+        self.assertEqual(payload["model_output"]["raw_label"], "Artificial")
 
     def test_unified_route_requires_real_model_env(self):
         response = self.client.post(
