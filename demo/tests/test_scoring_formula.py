@@ -4,43 +4,54 @@ from backend.detector_service import (
     combined_fashion_single_false_ad_risk,
     combined_makeup_single_false_ad_risk,
     combined_single_false_ad_risk,
+    single_verdict,
 )
 
 
 class ScoringFormulaTest(unittest.TestCase):
-    def test_single_false_ad_risk_keeps_low_and_mid_cases_reasonable(self):
+    def test_legacy_single_formula_aliases_fashion_formula(self):
         cases = [
-            ((0.90, 0.10, 0.10), 0.91),
-            ((0.10, 0.85, 0.20), 0.91),
-            ((0.30, 0.30, 0.30), 0.41),
-            ((0.05, 0.10, 0.10), 0.06),
+            (0.90, 0.10, 0.10),
+            (0.10, 0.85, 0.20),
+            (0.30, 0.30, 0.30),
+            (0.05, 0.10, 0.10),
         ]
-        for inputs, expected in cases:
+        for inputs in cases:
             with self.subTest(inputs=inputs):
-                self.assertAlmostEqual(combined_single_false_ad_risk(*inputs), expected, delta=0.025)
-                self.assertAlmostEqual(combined_fashion_single_false_ad_risk(*inputs), expected, delta=0.025)
+                self.assertAlmostEqual(
+                    combined_single_false_ad_risk(*inputs),
+                    combined_fashion_single_false_ad_risk(*inputs),
+                )
 
-    def test_makeup_single_formula_reduces_ai_only_risk(self):
-        fashion_risk = combined_fashion_single_false_ad_risk(0.90, 0.10, 0.10)
+    def test_makeup_single_formula_raises_ai_or_retouch_risk(self):
+        ai_risk = combined_makeup_single_false_ad_risk(0.90, 0.10, 0.10)
+        retouch_risk = combined_makeup_single_false_ad_risk(0.10, 0.90, 0.20)
+        combined_risk = combined_makeup_single_false_ad_risk(0.792, 0.308, 0.20)
+        low_risk = combined_makeup_single_false_ad_risk(0.05, 0.10, 0.10)
+        self.assertGreater(ai_risk, 0.65)
+        self.assertGreater(retouch_risk, 0.65)
+        self.assertGreater(combined_risk, 0.65)
+        self.assertLess(low_risk, 0.30)
+
+    def test_fashion_single_formula_weights_ai_more_heavily(self):
+        high_ai = combined_fashion_single_false_ad_risk(0.90, 0.10, 0.10)
+        high_retouch_low_ai = combined_fashion_single_false_ad_risk(0.10, 0.90, 0.20)
+        balanced = combined_fashion_single_false_ad_risk(0.50, 0.50, 0.30)
+        low = combined_fashion_single_false_ad_risk(0.05, 0.10, 0.10)
+        self.assertGreater(high_ai, 0.55)
+        self.assertGreater(high_retouch_low_ai, 0.25)
+        self.assertLess(high_retouch_low_ai, 0.55)
+        self.assertGreater(balanced, 0.25)
+        self.assertLess(balanced, 0.55)
+        self.assertLess(low, 0.25)
+
+    def test_single_verdict_uses_mode_specific_thresholds(self):
         makeup_risk = combined_makeup_single_false_ad_risk(0.90, 0.10, 0.10)
-        self.assertGreater(fashion_risk, 0.85)
-        self.assertLess(makeup_risk, 0.08)
-
-    def test_makeup_single_formula_discounts_high_ai_probability(self):
-        low_ai = combined_makeup_single_false_ad_risk(0.10, 0.70, 0.50)
-        high_ai = combined_makeup_single_false_ad_risk(0.90, 0.70, 0.50)
-        self.assertLess(high_ai, low_ai)
-
-    def test_fashion_single_formula_raises_high_ai_probability(self):
-        low_ai = combined_fashion_single_false_ad_risk(0.10, 0.20, 0.20)
-        high_ai = combined_fashion_single_false_ad_risk(0.90, 0.20, 0.20)
-        self.assertGreater(high_ai, low_ai)
-
-    def test_makeup_single_formula_still_responds_to_retouch(self):
-        low_retouch = combined_makeup_single_false_ad_risk(0.20, 0.10, 0.10)
-        high_retouch = combined_makeup_single_false_ad_risk(0.20, 0.85, 0.60)
-        self.assertLess(low_retouch, 0.12)
-        self.assertGreater(high_retouch, 0.45)
+        fashion_risk = combined_fashion_single_false_ad_risk(0.90, 0.10, 0.10)
+        self.assertEqual(single_verdict("makeup", makeup_risk), "High risk")
+        self.assertEqual(single_verdict("fashion", fashion_risk), "High risk")
+        self.assertEqual(single_verdict("fashion", 0.30), "Medium risk")
+        self.assertEqual(single_verdict("makeup", 0.30), "Medium risk")
 
 
 if __name__ == "__main__":
