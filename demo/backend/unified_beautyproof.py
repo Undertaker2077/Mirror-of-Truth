@@ -69,7 +69,8 @@ def unified_status() -> dict[str, Any]:
     if root is not None:
         model_paths = {
             "v2": str(root / "models" / "retouch_detector_v2" / "best_model.pt"),
-            "type_cnn_v1": str(root / "models" / "retouch_multitask_cnn_v1" / "best_model.pt"),
+            "type_three_v1": str(root / "models" / "retouch_three_type_v1" / "best_model.pt"),
+            "type_cnn_v1_legacy": str(root / "models" / "retouch_multitask_cnn_v1" / "best_model.pt"),
             "yolo_regions_v1": str(root / "models" / "yolo_retouch_regions_v1" / "best.pt"),
         }
     return {
@@ -193,6 +194,7 @@ def to_visual_evidence(result: dict[str, Any]) -> dict[str, Any]:
         reliability = "Low"
 
     type_probs = {item["name"]: float(item["probability"]) for item in result.get("retouch_types", [])}
+    skin_probability = type_probs.get("skin_enhancement", type_probs.get("smoothing", probability))
     heatmap = result.get("_demo_heatmap") or {}
     return {
         "schema_version": result.get("schema_version", "1.0"),
@@ -216,16 +218,24 @@ def to_visual_evidence(result: dict[str, Any]) -> dict[str, Any]:
         "limitations": result.get("limitations", []),
         "metrics": {
             "skin_smoothing": {
-                "probability": round(type_probs.get("smoothing", probability), 6),
-                "basis": "type_classifier" if "smoothing" in type_probs else "binary_score_fallback",
+                "probability": round(skin_probability, 6),
+                "basis": "type_classifier" if "skin_enhancement" in type_probs or "smoothing" in type_probs else "binary_score_fallback",
             },
             "texture_loss": {
-                "probability": round(type_probs.get("smoothing", probability), 6),
-                "basis": "smoothing_proxy",
+                "probability": round(skin_probability, 6),
+                "basis": "skin_enhancement_proxy",
             },
             "whitening": {
-                "probability": round(type_probs.get("whitening", probability), 6),
-                "basis": "type_classifier" if "whitening" in type_probs else "binary_score_fallback",
+                "probability": round(skin_probability, 6),
+                "basis": "skin_enhancement_proxy",
+            },
+            "face_slimming": {
+                "probability": round(type_probs.get("face_slimming", probability), 6),
+                "basis": "type_classifier" if "face_slimming" in type_probs else "binary_score_fallback",
+            },
+            "facial_contouring": {
+                "probability": round(type_probs.get("facial_contouring", probability), 6),
+                "basis": "type_classifier" if "facial_contouring" in type_probs else "binary_score_fallback",
             },
         },
     }

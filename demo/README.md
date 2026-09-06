@@ -26,6 +26,55 @@ http://127.0.0.1:8765
 - Fashion single image: AI-generated seller-image risk.
 - Before/after makeup: exposure, white balance, smoothing, and retouching differences.
 
+## Before/After Face Alignment
+
+The before/after route returns `before_after_evidence` with:
+
+```text
+alignment_offset
+face_angle_diff_degrees
+face_angle_similarity
+bbox_size_diff
+crop_similarity
+comparison_reliability
+aligned_before_url
+aligned_after_url
+```
+
+The demo uses a real MediaPipe FaceLandmarker worker for B1/B4 and writes
+aligned preview images under `/aligned`. The worker runs in a Python 3.11
+virtual environment so the main FastAPI process is protected from the native
+MediaPipe crash seen in Python 3.13.
+
+Create the worker environment:
+
+```bash
+python3.11 -m venv .venv-mediapipe
+.venv-mediapipe/bin/python -m pip install --upgrade pip
+.venv-mediapipe/bin/python -m pip install mediapipe==0.10.35 pillow numpy
+```
+
+Download the FaceLandmarker task model:
+
+```text
+mkdir -p models
+curl -L --fail --output models/face_landmarker.task https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task
+```
+
+If the worker or task model lives elsewhere, set:
+
+```bash
+export MEDIAPIPE_PYTHON=/path/to/python-with-mediapipe
+export MEDIAPIPE_FACE_LANDMARKER_PATH=/path/to/face_landmarker.task
+```
+
+The OpenCV face-box fallback is only for local debugging and must be enabled
+explicitly:
+
+```bash
+ALLOW_FACE_ALIGNMENT_FALLBACK=1 python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8765
+```
+
 ## Frontend
 
 The frontend is a Vue 3 + Vite app in `frontend/`.

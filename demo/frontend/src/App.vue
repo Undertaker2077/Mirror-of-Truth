@@ -111,6 +111,14 @@
         <div v-else class="placeholder">上传图片后显示模型关注区域。</div>
       </div>
 
+      <div v-if="alignedBeforeUrl || alignedAfterUrl" class="result-section">
+        <h3>对齐图</h3>
+        <div class="aligned-grid">
+          <img v-if="alignedBeforeUrl" class="aligned-image" alt="对齐后的 Before" :src="alignedBeforeUrl" />
+          <img v-if="alignedAfterUrl" class="aligned-image" alt="对齐后的 After" :src="alignedAfterUrl" />
+        </div>
+      </div>
+
       <div class="result-section">
         <h3>输出 JSON</h3>
         <div class="json-box">{{ jsonText }}</div>
@@ -187,6 +195,7 @@ const canAnalyze = computed(() => inputCount.value === config.value.slots);
 const activePayload = computed(() => store.value.result);
 const activeModel = computed(() => activePayload.value?.model_output || activePayload.value?.after_model_output || {});
 const activeVisual = computed(() => activePayload.value?.visual_evidence || {});
+const activeComparison = computed(() => activePayload.value?.before_after_evidence || null);
 const activeUnified = computed(
   () => activePayload.value?.beautyproof_unified?.result || activePayload.value?.after_beautyproof_unified?.result || null,
 );
@@ -207,18 +216,41 @@ const scoreClass = computed(() => ({
 }));
 const verdictClass = scoreClass;
 const heatmapUrl = computed(() => activeVisual.value?.manipulation_map_url || "");
+const alignedBeforeUrl = computed(() => activeComparison.value?.aligned_before_url || "");
+const alignedAfterUrl = computed(() => activeComparison.value?.aligned_after_url || "");
 const evidenceItems = computed(() => {
   if (store.value.error) return [store.value.error];
   if (!activePayload.value) return [];
   const model = activeModel.value;
   const visual = activeVisual.value;
   const unified = activeUnified.value;
+  const breakdown = activePayload.value.risk_breakdown?.inputs;
   const aiLabel = model.label === "ai" ? "是" : model.label === "real" ? "否" : "未知";
-  const items = [
-    `AI生成检测：${aiLabel}，AI概率 ${formatPercent(model.probability_ai)}，backend=${model.backend || "N/A"}，mock=${Boolean(model.mock)}。`,
-    `BeautyProof修图检测：修图概率 ${formatPercent(visual.retouch_probability)}，可靠性 ${visual.reliability || "N/A"}，model=${visual.model_version || "N/A"}。`,
-    ...(activePayload.value.evidence || []),
-  ];
+  const items = [];
+  if (activePayload.value.mode === "before_after" && breakdown) {
+    items.push(
+      `Before AI概率 ${formatPercent(breakdown.before_ai_probability)}，After AI概率 ${formatPercent(breakdown.after_ai_probability)}，AI差距 ${formatPercent(breakdown.ai_probability_gap ?? breakdown.ai_probability_delta)}，${breakdown.ai_change_text || formatChangeText("AI概率", breakdown.after_ai_minus_before_ai)}。`,
+    );
+    items.push(
+      `Before修图概率 ${formatPercent(breakdown.before_retouch_probability)}，After修图概率 ${formatPercent(breakdown.after_retouch_probability)}，美颜差距 ${formatPercent(breakdown.retouch_probability_delta)}，${breakdown.retouch_change_text || formatChangeText("修图概率", breakdown.after_retouch_minus_before_retouch)}。`,
+    );
+    items.push(
+      `综合风险公式：美颜对比40% + After修图22% + After AI 15% + After AI增加5% + AI差异5% + 几何干扰10% + 条件干扰3%。`,
+    );
+  } else {
+    items.push(
+      `AI生成检测：${aiLabel}，AI概率 ${formatPercent(model.probability_ai)}，backend=${model.backend || "N/A"}，mock=${Boolean(model.mock)}。`,
+      `BeautyProof修图检测：修图概率 ${formatPercent(visual.retouch_probability)}，可靠性 ${visual.reliability || "N/A"}，model=${visual.model_version || "N/A"}。`,
+    );
+  }
+  items.push(...(activePayload.value.evidence || []));
+  if (model.model_name && activePayload.value.mode !== "before_after") {
+    items.splice(
+      1,
+      0,
+      `AI模型：${model.model_name}，checkpoint=${model.checkpoint || "N/A"}，source=${model.source || "N/A"}。`,
+    );
+  }
   if (unified) {
     items.push(
       `Unified结论：retouched=${Boolean(unified.retouched)}，strength=${unified.retouch_strength || "none"}，region_status=${unified.region_status || "N/A"}。`,
@@ -233,6 +265,9 @@ const evidenceItems = computed(() => {
   if (activePayload.value.before_after_evidence) {
     items.push(
       `前后对比：可靠性 ${activePayload.value.before_after_evidence.comparison_reliability}，曝光差异 ${activePayload.value.before_after_evidence.exposure_diff}。`,
+    );
+    items.push(
+      `人脸对齐：${activePayload.value.before_after_evidence.alignment_status || "Unknown"}，中心偏移 ${activePayload.value.before_after_evidence.alignment_offset || "Unknown"}，角度差 ${activePayload.value.before_after_evidence.face_angle_diff_degrees ?? "Unknown"}°，裁剪 ${activePayload.value.before_after_evidence.crop_similarity || "Unknown"}。`,
     );
   }
   return items;
@@ -280,13 +315,13 @@ async function analyze() {
       const form = new FormData();
       form.append("image", current.files.A);
       form.append("mode", config.value.apiMode);
-      form.append("backend", "sentry-convnext-small");
+      form.append("backend", "aide");
       response = await fetch("/api/analyze/single", { method: "POST", body: form });
     } else {
       const form = new FormData();
       form.append("before_image", current.files.A);
       form.append("after_image", current.files.B);
-      form.append("backend", "sentry-convnext-small");
+      form.append("backend", "aide");
       response = await fetch("/api/analyze/before-after", { method: "POST", body: form });
     }
     if (!response.ok) throw new Error(`接口错误 ${response.status}`);
@@ -301,6 +336,19 @@ async function analyze() {
 function formatPercent(value) {
   if (typeof value !== "number") return "N/A";
   return `${Math.round(value * 1000) / 10}%`;
+}
+
+function formatSignedPercent(value) {
+  if (typeof value !== "number") return "N/A";
+  const percentage = Math.round(value * 1000) / 10;
+  return `${percentage >= 0 ? "+" : ""}${percentage}%`;
+}
+
+function formatChangeText(label, value) {
+  if (typeof value !== "number") return `${label}变化未知`;
+  const percentage = Math.abs(Math.round(value * 1000) / 10);
+  if (percentage < 0.5) return `${label}基本一致`;
+  return `After 比 Before ${value > 0 ? "高" : "低"} ${percentage}%`;
 }
 
 onMounted(() => {
@@ -718,6 +766,21 @@ button.secondary {
 .heatmap {
   width: 100%;
   max-height: 260px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.aligned-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.aligned-image {
+  width: 100%;
+  aspect-ratio: 1;
   object-fit: contain;
   border: 1px solid var(--line);
   border-radius: 8px;

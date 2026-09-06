@@ -84,6 +84,11 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertIn("before_after_evidence", payload)
         self.assertIn("after_beautyproof_v2", payload)
         self.assertIn("visual_evidence", payload)
+        self.assertIn("risk_breakdown", payload)
+        self.assertIn("before_ai_probability", payload["risk_breakdown"]["inputs"])
+        self.assertIn("after_ai_probability", payload["risk_breakdown"]["inputs"])
+        self.assertIn("beautification_delta", payload["risk_breakdown"]["inputs"])
+        self.assertEqual(payload["risk_breakdown"]["weights"]["beautification_delta"], 0.40)
         self.assertEqual(payload["after_model_output"]["label"], "ai")
 
 

@@ -10,7 +10,9 @@ from typing import Any
 
 from PIL import Image, ImageFilter, ImageStat
 
+from .aide_detector import AIDEGenerationDetector
 from .beautyproof_v2 import BeautyProofV2Service
+from .face_alignment_mediapipe import compare_before_after_faces
 from .unified_beautyproof import UnifiedBeautyProofService
 
 
@@ -24,6 +26,104 @@ def _clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
 
 def _rounded(value: float) -> float:
     return round(float(value), 6)
+
+
+def _direction_text(label: str, signed_delta: float) -> str:
+    magnitude = abs(signed_delta)
+    if magnitude < 0.005:
+        return f"{label}基本一致"
+    direction = "高" if signed_delta > 0 else "低"
+    return f"After 比 Before {direction} {magnitude:.1%}"
+
+
+def combined_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
+    ai = _clamp(ai_prob) ** 1.6
+    retouch = _clamp(retouch_prob) ** 1.6
+    heuristic = _clamp(heuristic_prob) ** 1.6
+    return _clamp(1.0 - ((1.0 - ai) ** 1.3) * ((1.0 - retouch) ** 1.6) * ((1.0 - heuristic) ** 0.5))
+
+
+def combined_before_after_false_ad_risk(
+    *,
+    before_ai_prob: float,
+    after_ai_prob: float,
+    before_retouch_prob: float,
+    after_retouch_prob: float,
+    before_heuristic_prob: float,
+    after_heuristic_prob: float,
+    comparison: dict[str, Any],
+) -> dict[str, Any]:
+    ai_signed_delta = after_ai_prob - before_ai_prob
+    ai_gap = abs(ai_signed_delta)
+    after_ai_increase = max(0.0, ai_signed_delta)
+    retouch_signed_delta = after_retouch_prob - before_retouch_prob
+    retouch_increase = max(0.0, retouch_signed_delta)
+    retouch_gap = abs(retouch_signed_delta)
+    heuristic_signed_delta = after_heuristic_prob - before_heuristic_prob
+    heuristic_increase = max(0.0, heuristic_signed_delta)
+    heuristic_gap = abs(heuristic_signed_delta)
+    beautification_delta = _clamp(
+        0.55 * retouch_increase
+        + 0.20 * heuristic_increase
+        + 0.15 * retouch_gap
+        + 0.10 * heuristic_gap
+    )
+
+    geometry_penalty = _clamp(
+        0.45 * float(comparison.get("alignment_offset_ratio") or 0.0) / 0.10
+        + 0.25 * float(comparison.get("bbox_size_diff_ratio") or 0.0) / 0.20
+        + 0.20 * float(comparison.get("crop_shift_ratio") or 0.0) / 0.16
+        + 0.10 * min(float(comparison.get("face_angle_diff_degrees") or 0.0) / 15.0, 1.0)
+    )
+    condition_penalty = _clamp(float(comparison.get("significant_difference_count") or 0) / 4.0)
+
+    score = _clamp(
+        0.40 * (beautification_delta ** 0.75)
+        + 0.22 * (after_retouch_prob ** 1.15)
+        + 0.15 * (after_ai_prob ** 1.2)
+        + 0.05 * (after_ai_increase ** 0.85)
+        + 0.05 * (ai_gap ** 1.15)
+        + 0.10 * geometry_penalty
+        + 0.03 * condition_penalty
+    )
+    return {
+        "formula": (
+            "0.40*beautification_delta^0.75 + 0.22*after_retouch^1.15 + "
+            "0.15*after_ai^1.2 + 0.05*after_ai_increase^0.85 + "
+            "0.05*ai_gap^1.15 + 0.10*geometry_penalty + 0.03*condition_penalty"
+        ),
+        "score": _rounded(score),
+        "weights": {
+            "beautification_delta": 0.40,
+            "after_retouch_probability": 0.22,
+            "after_ai_probability": 0.15,
+            "after_ai_increase": 0.05,
+            "ai_probability_gap": 0.05,
+            "geometry_penalty": 0.10,
+            "condition_penalty": 0.03,
+        },
+        "inputs": {
+            "before_ai_probability": _rounded(before_ai_prob),
+            "after_ai_probability": _rounded(after_ai_prob),
+            "ai_probability_gap": _rounded(ai_gap),
+            "ai_probability_delta": _rounded(ai_gap),
+            "after_ai_increase": _rounded(after_ai_increase),
+            "after_ai_minus_before_ai": _rounded(ai_signed_delta),
+            "ai_change_text": _direction_text("AI 概率", ai_signed_delta),
+            "before_retouch_probability": _rounded(before_retouch_prob),
+            "after_retouch_probability": _rounded(after_retouch_prob),
+            "retouch_probability_delta": _rounded(retouch_gap),
+            "after_retouch_minus_before_retouch": _rounded(retouch_signed_delta),
+            "retouch_change_text": _direction_text("修图概率", retouch_signed_delta),
+            "before_heuristic_retouch_score": _rounded(before_heuristic_prob),
+            "after_heuristic_retouch_score": _rounded(after_heuristic_prob),
+            "heuristic_retouch_delta": _rounded(heuristic_gap),
+            "after_heuristic_minus_before_heuristic": _rounded(heuristic_signed_delta),
+            "beautification_delta": _rounded(beautification_delta),
+            "geometry_penalty": _rounded(geometry_penalty),
+            "condition_penalty": _rounded(condition_penalty),
+        },
+    }
 
 
 def _open_image(image_bytes: bytes) -> Image.Image:
@@ -47,6 +147,15 @@ class AIDetectorService:
         self.real_model_enabled = os.getenv("MIRROR_USE_REAL_AIDETECTOR") == "1"
 
     def detect(self, image_bytes: bytes, filename: str | None = None) -> dict[str, Any]:
+        if self.backend == "aide":
+            try:
+                return AIDEGenerationDetector().detect(image_bytes, filename)
+            except Exception as exc:  # noqa: BLE001
+                return self._mock_detection(
+                    image_bytes,
+                    filename,
+                    unavailable_reason=f"AIDE detector unavailable: {exc}",
+                )
         if self.real_model_enabled:
             try:
                 image = _open_image(image_bytes)
@@ -158,6 +267,7 @@ def compare_images_basic(before_bytes: bytes, after_bytes: bytes) -> dict[str, A
         "exposure_diff": f"{exposure_delta:+.1%}",
         "white_balance_diff": "Significant" if abs(wb_delta) >= 0.08 else "Similar",
         "texture_smoothing_diff": f"{smooth_delta:+.1%}",
+        "texture_smoothing_similarity": "Significant" if smooth_delta >= 0.10 else "Similar",
         "face_angle_similarity": "Unknown",
         "crop_similarity": "Unknown",
         "comparison_reliability": reliability,
@@ -165,6 +275,54 @@ def compare_images_basic(before_bytes: bytes, after_bytes: bytes) -> dict[str, A
         "before_retouch": before,
         "after_retouch": after,
     }
+
+
+def enrich_with_face_alignment(
+    comparison: dict[str, Any],
+    before_bytes: bytes,
+    after_bytes: bytes,
+    before_filename: str | None,
+    after_filename: str | None,
+) -> dict[str, Any]:
+    geometry = compare_before_after_faces(before_bytes, after_bytes, before_filename, after_filename)
+    enriched = dict(comparison)
+    enriched["face_alignment"] = geometry
+    for key in [
+        "alignment_status",
+        "alignment_offset",
+        "alignment_offset_ratio",
+        "alignment_success",
+        "face_angle_diff_degrees",
+        "face_angle_similarity",
+        "bbox_size_diff",
+        "bbox_size_diff_ratio",
+        "crop_shift_ratio",
+        "crop_similarity",
+        "aligned_before",
+        "aligned_after",
+        "aligned_before_url",
+        "aligned_after_url",
+        "before_face",
+        "after_face",
+    ]:
+        if key in geometry:
+            enriched[key] = geometry[key]
+
+    significant_count = 0
+    significant_count += abs(enriched["after_retouch"]["brightness"] - enriched["before_retouch"]["brightness"]) >= 0.08
+    significant_count += enriched["after_retouch"]["smoothness_score"] - enriched["before_retouch"]["smoothness_score"] >= 0.10
+    significant_count += abs(enriched["after_retouch"]["white_balance_shift"] - enriched["before_retouch"]["white_balance_shift"]) >= 0.08
+    significant_count += geometry.get("alignment_offset_ratio") is not None and geometry["alignment_offset_ratio"] >= 0.05
+    significant_count += geometry.get("face_angle_similarity") == "Significant"
+    significant_count += geometry.get("crop_similarity") == "Significant"
+
+    enriched["significant_difference_count"] = int(significant_count)
+    enriched["comparison_reliability"] = "Low" if significant_count >= 2 else "Medium" if significant_count == 1 else "High"
+    enriched["agent_should_notice"] = [
+        *comparison["agent_should_notice"],
+        *geometry.get("agent_should_notice", []),
+    ]
+    return enriched
 
 
 def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, backend: str) -> dict[str, Any]:
@@ -180,7 +338,7 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
     beautyproof_score = (
         float(visual_evidence["integrity_score"]) if visual_evidence else float(retouch["retouch_score"])
     )
-    confidence = _clamp(0.52 * beautyproof_score + 0.32 * ai_prob + 0.16 * float(retouch["retouch_score"]))
+    confidence = combined_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
     if mode == "makeup":
         evidence = [
             "单图只能判断 AI/后期/美颜风险，不能直接证明某个化妆品功效。",
@@ -217,9 +375,10 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
     evidence.extend(retouch["tags"] or ["未检测到强烈的基础后期信号"])
     return {
         "mode": mode,
-        "verdict": "High risk" if confidence >= 0.62 else "Medium risk" if confidence >= 0.42 else "Low risk",
+        "verdict": "High risk" if confidence >= 0.65 else "Medium risk" if confidence >= 0.30 else "Low risk",
         "false_advertising_confidence": _rounded(confidence),
-        "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.42 else "INSUFFICIENT",
+        "risk_formula": "1 - (1 - ai^1.6)^1.3 * (1 - retouch^1.6)^1.6 * (1 - heuristic^1.6)^0.5",
+        "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.30 else "INSUFFICIENT",
         "beautyproof_unified": beautyproof_unified,
         "beautyproof_v2": legacy_beautyproof,
         "visual_evidence": visual_evidence,
@@ -249,16 +408,45 @@ def build_before_after_analysis(
     after_visual_evidence = after_beautyproof.get("visual_evidence")
     if after_visual_evidence is None and legacy_after_beautyproof is not None:
         after_visual_evidence = legacy_after_beautyproof.get("visual_evidence")
-    comparison = compare_images_basic(before_bytes, after_bytes)
-    reliability_penalty = {"High": 0.18, "Medium": 0.38, "Low": 0.6}[comparison["comparison_reliability"]]
-    ai_risk = max(float(before_model["probability_ai"]), float(after_model["probability_ai"]))
-    beautyproof_score = (
+    comparison = enrich_with_face_alignment(
+        compare_images_basic(before_bytes, after_bytes),
+        before_bytes,
+        after_bytes,
+        before_filename,
+        after_filename,
+    )
+    before_visual_evidence = before_beautyproof.get("visual_evidence")
+    if before_visual_evidence is None and legacy_before_beautyproof is not None:
+        before_visual_evidence = legacy_before_beautyproof.get("visual_evidence")
+    before_ai_prob = float(before_model["probability_ai"])
+    after_ai_prob = float(after_model["probability_ai"])
+    before_beautyproof_score = (
+        float(before_visual_evidence["integrity_score"])
+        if before_visual_evidence
+        else float(comparison["before_retouch"]["retouch_score"])
+    )
+    after_beautyproof_score = (
         float(after_visual_evidence["integrity_score"])
         if after_visual_evidence
         else float(comparison["after_retouch"]["retouch_score"])
     )
-    confidence = _clamp(0.38 * beautyproof_score + 0.26 * ai_risk + 0.36 * reliability_penalty)
-    evidence = list(comparison["agent_should_notice"])
+    risk = combined_before_after_false_ad_risk(
+        before_ai_prob=before_ai_prob,
+        after_ai_prob=after_ai_prob,
+        before_retouch_prob=before_beautyproof_score,
+        after_retouch_prob=after_beautyproof_score,
+        before_heuristic_prob=float(comparison["before_retouch"]["retouch_score"]),
+        after_heuristic_prob=float(comparison["after_retouch"]["retouch_score"]),
+        comparison=comparison,
+    )
+    confidence = float(risk["score"])
+    evidence = [
+        f"Before 图 AI 概率 {before_ai_prob:.1%}，After 图 AI 概率 {after_ai_prob:.1%}，AI 差距 {risk['inputs']['ai_probability_gap']:.1%}，{risk['inputs']['ai_change_text']}。",
+        f"Before 图 BeautyProof 修图概率 {before_beautyproof_score:.1%}，After 图 BeautyProof 修图概率 {after_beautyproof_score:.1%}，美颜差距 {risk['inputs']['retouch_probability_delta']:.1%}，{risk['inputs']['retouch_change_text']}。",
+        f"美颜对比增量 {risk['inputs']['beautification_delta']:.1%}，这是妆前妆后归因风险的最高权重项，权重 40%。",
+        f"几何干扰分 {risk['inputs']['geometry_penalty']:.1%}，包含中心偏移、bbox 大小、裁剪和角度差。",
+        *comparison["agent_should_notice"],
+    ]
     if after_visual_evidence:
         evidence.append(
             f"After 图 BeautyProof 修图概率 {after_visual_evidence['retouch_probability']:.1%}，"
@@ -275,9 +463,11 @@ def build_before_after_analysis(
         )
     return {
         "mode": "before_after",
-        "verdict": "High risk" if confidence >= 0.62 else "Medium risk" if confidence >= 0.42 else "Low risk",
+        "verdict": "High risk" if confidence >= 0.65 else "Medium risk" if confidence >= 0.35 else "Low risk",
         "false_advertising_confidence": _rounded(confidence),
-        "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.42 else "SUPPORTED",
+        "risk_formula": risk["formula"],
+        "risk_breakdown": risk,
+        "groundtruth_label_suggestion": "CONFOUNDED" if confidence >= 0.35 else "SUPPORTED",
         "before_beautyproof_unified": before_beautyproof,
         "after_beautyproof_unified": after_beautyproof,
         "before_beautyproof_v2": legacy_before_beautyproof,

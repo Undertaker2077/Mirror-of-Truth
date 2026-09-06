@@ -10,3 +10,12 @@ demo/node_modules/
 demo/frontend/dist/
 .venv/
 venv/
+
+# Demo local runtime and model weights
+demo/runtime/
+demo/.venv-mediapipe/
+demo/node_modules/
+demo/frontend/dist/
+demo/models/aide/*.pth
+demo/models/aide/*.bin
+demo/models/face_landmarker.task

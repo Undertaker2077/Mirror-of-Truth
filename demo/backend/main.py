@@ -7,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .aide_detector import aide_status
 from .beautyproof_v2 import CHECKPOINT_CANDIDATES, HEATMAP_ROOT, BeautyProofV2Service
 from .detector_service import build_before_after_analysis, build_single_analysis
+from .face_alignment_mediapipe import ALIGNED_ROOT, face_alignment_status
 from .unified_beautyproof import (
     MAX_UPLOAD_BYTES,
     analyze_image_bytes,
@@ -36,6 +38,8 @@ elif FRONTEND_DIR.exists():
     app.mount("/src", StaticFiles(directory=str(FRONTEND_DIR / "src")), name="src")
 HEATMAP_ROOT.mkdir(parents=True, exist_ok=True)
 app.mount("/heatmaps", StaticFiles(directory=str(HEATMAP_ROOT)), name="heatmaps")
+ALIGNED_ROOT.mkdir(parents=True, exist_ok=True)
+app.mount("/aligned", StaticFiles(directory=str(ALIGNED_ROOT)), name="aligned")
 
 
 @app.get("/")
@@ -60,7 +64,9 @@ def health() -> dict:
         },
         "beautyproof_unified": unified_status(),
         "ai_detector_repo_present": VENDOR_DIR.exists(),
-        "real_detector_env": "set MIRROR_USE_REAL_AIDETECTOR=1 to load lynote-ai/ai-image-detector",
+        "aide_detector": aide_status(),
+        "face_alignment": face_alignment_status(),
+        "real_detector_env": "AIDE is the default AI-generation detector; set backend=ultra with MIRROR_USE_REAL_AIDETECTOR=1 for lynote-ai fallback",
         "supported_modes": ["beautyproof_unified", "beautyproof_v2", "makeup_single", "fashion_single", "before_after"],
     }
 
@@ -111,7 +117,7 @@ async def beautyproof_unified_compatible_analyze(
 async def analyze_single(
     image: UploadFile = File(...),
     mode: str = Form("makeup"),
-    backend: str = Form("ultra"),
+    backend: str = Form("aide"),
 ) -> dict:
     image_bytes = await image.read()
     clean_mode = "fashion" if mode == "fashion" else "makeup"
@@ -122,7 +128,7 @@ async def analyze_single(
 async def analyze_before_after(
     before_image: UploadFile = File(...),
     after_image: UploadFile = File(...),
-    backend: str = Form("ultra"),
+    backend: str = Form("aide"),
 ) -> dict:
     before_bytes = await before_image.read()
     after_bytes = await after_image.read()

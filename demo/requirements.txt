@@ -5,7 +5,9 @@ python-multipart
 numpy
 torch
 torchvision
+open-clip-torch
 mmengine
+mediapipe
 opencv-python-headless
 ultralytics
 -e vendor/ai-image-detector[api]
