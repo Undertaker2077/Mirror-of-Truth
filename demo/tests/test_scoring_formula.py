@@ -36,16 +36,16 @@ class ScoringFormulaTest(unittest.TestCase):
                 self.assertAlmostEqual(combined_single_false_ad_risk(*inputs), expected, delta=0.025)
                 self.assertAlmostEqual(combined_fashion_single_false_ad_risk(*inputs), expected, delta=0.025)
 
-    def test_makeup_single_formula_raises_ai_only_risk(self):
+    def test_makeup_single_formula_reduces_ai_only_risk(self):
         fashion_risk = combined_fashion_single_false_ad_risk(0.90, 0.10, 0.10)
         makeup_risk = combined_makeup_single_false_ad_risk(0.90, 0.10, 0.10)
         self.assertGreater(fashion_risk, 0.85)
-        self.assertGreater(makeup_risk, 0.85)
+        self.assertLess(makeup_risk, 0.08)
 
-    def test_makeup_single_formula_uses_high_ai_probability_as_risk(self):
+    def test_makeup_single_formula_discounts_high_ai_probability(self):
         low_ai = combined_makeup_single_false_ad_risk(0.10, 0.70, 0.50)
         high_ai = combined_makeup_single_false_ad_risk(0.90, 0.70, 0.50)
-        self.assertGreater(high_ai, low_ai)
+        self.assertLess(high_ai, low_ai)
 
     def test_fashion_single_formula_raises_high_ai_probability(self):
         low_ai = combined_fashion_single_false_ad_risk(0.10, 0.20, 0.20)
@@ -55,8 +55,8 @@ class ScoringFormulaTest(unittest.TestCase):
     def test_makeup_single_formula_still_responds_to_retouch(self):
         low_retouch = combined_makeup_single_false_ad_risk(0.20, 0.10, 0.10)
         high_retouch = combined_makeup_single_false_ad_risk(0.20, 0.85, 0.60)
-        self.assertLess(low_retouch, 0.25)
-        self.assertGreater(high_retouch, 0.65)
+        self.assertLess(low_retouch, 0.12)
+        self.assertGreater(high_retouch, 0.45)
 
     def test_makeup_single_demo_ai_overrides(self):
         base = {

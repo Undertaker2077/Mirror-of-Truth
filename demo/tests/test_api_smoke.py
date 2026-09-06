@@ -76,12 +76,20 @@ class ApiSmokeTest(unittest.TestCase):
             response = self.client.post(
                 "/api/analyze/single",
                 data={"mode": "makeup", "backend": "hf3"},
-                files={"image": ("test.png", tiny_png(), "image/png")},
+                files={
+                    "image": (
+                        "Picture2.png",
+                        Path("/Users/maoyiqi/Downloads/demo-samples/sample1/Picture2.png").read_bytes(),
+                        "image/png",
+                    )
+                },
             )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["model_output"]["backend"], "hf-ai-deepfake-real")
         self.assertEqual(payload["model_output"]["raw_label"], "Artificial")
+        self.assertEqual(payload["model_output"]["probability_ai"], 0.82)
+        self.assertNotIn("demo_override", payload["model_output"])
 
     def test_unified_route_requires_real_model_env(self):
         response = self.client.post(

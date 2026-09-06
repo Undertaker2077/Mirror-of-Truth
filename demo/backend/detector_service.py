@@ -117,8 +117,8 @@ def combined_makeup_single_false_ad_risk(ai_prob: float, retouch_prob: float, he
         + 0.22 * (heuristic ** 1.15)
         + 0.10 * ((retouch * heuristic) ** 0.80)
     )
-    ai_risk = ai ** 1.20
-    return _clamp(1.0 - (1.0 - ai_risk) * (1.0 - base_beauty_risk))
+    ai_discount = 1.0 - 0.45 * (ai ** 1.20)
+    return _clamp(base_beauty_risk * ai_discount)
 
 
 def combined_single_false_ad_risk(ai_prob: float, retouch_prob: float, heuristic_prob: float) -> float:
@@ -418,9 +418,10 @@ def enrich_with_face_alignment(
 
 def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, backend: str) -> dict[str, Any]:
     model = AIDetectorService(backend=backend).detect(image_bytes, filename)
-    if mode == "makeup":
+    uses_aide_demo_backend = backend == "aide"
+    if uses_aide_demo_backend and mode == "makeup":
         model = apply_makeup_single_ai_override(model, image_bytes)
-    elif mode == "fashion":
+    elif uses_aide_demo_backend and mode == "fashion":
         model = apply_fashion_single_ai_override(model, filename, image_bytes)
     beautyproof_unified = UnifiedBeautyProofService().predict_bytes(image_bytes, filename)
     legacy_beautyproof = None
@@ -436,8 +437,8 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
     if mode == "makeup":
         confidence = combined_makeup_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
         risk_formula = (
-            "1 - (1 - ai^1.20) * "
-            "(1 - (0.55*retouch^1.25 + 0.22*heuristic^1.15 + 0.10*(retouch*heuristic)^0.80))"
+            "(0.55*retouch^1.25 + 0.22*heuristic^1.15 + "
+            "0.10*(retouch*heuristic)^0.80) * (1 - 0.45*ai^1.20)"
         )
     else:
         confidence = combined_fashion_single_false_ad_risk(ai_prob, beautyproof_score, float(retouch["retouch_score"]))
@@ -446,7 +447,7 @@ def build_single_analysis(image_bytes: bytes, filename: str | None, mode: str, b
         evidence = [
             "单图只能判断 AI/后期/美颜风险，不能直接证明某个化妆品功效。",
             "若图片存在磨皮、提亮、滤镜或五官调整，化妆品功效归因应判为 CONFOUNDED。",
-            "妆造单图风险由 AI 生成风险与 BeautyProof/基础美颜风险并联计算；任一风险项很高都会抬高总体风险。",
+            "妆造单图风险公式以 BeautyProof 修图概率和基础美颜信号为主；AI 生成概率越高，越降低妆效归因置信度。",
         ]
     else:
         evidence = [
